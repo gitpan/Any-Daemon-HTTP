@@ -1,0 +1,152 @@
+=encoding utf8
+
+=head1 NAME
+
+Any::Daemon::HTTP - preforking HTTP daemon
+
+=head1 INHERITANCE
+
+ Any::Daemon::HTTP
+   is a Any::Daemon
+
+=head1 SYNOPSIS
+
+  my $http = Any::Daemon::HTTP->new(%opts);
+  $http->run;
+
+=head1 DESCRIPTION
+
+This module extends the basic L<Any::Daemon|Any::Daemon> with childs which
+handle http connections.  The HTTP/1.1 protocol implementation of
+HTTP::Daemon is (ab)used.
+
+Please support my development work by submitting bug-reports, patches
+and (if available) a donation.
+
+See L<documentation in base class|Any::Daemon/"DESCRIPTION">.
+ 
+=head1 METHODS
+
+See L<documentation in base class|Any::Daemon/"METHODS">.
+ 
+=head2 Constructors
+
+See L<documentation in base class|Any::Daemon/"Constructors">.
+ 
+=over 4
+
+=item Any::Daemon::HTTP-E<gt>B<new>(OPTIONS)
+
+See the option descriptions of L<Any::Daemon::new()|Any::Daemon/"Constructors">.
+
+ -Option   --Defined in     --Default
+  docroot                     'http://$host'
+  group      Any::Daemon      undef
+  host                        <from socket>
+  pid_file   Any::Daemon      undef
+  server_id                   <program name>
+  socket                      <created internally>
+  use_ssl                     <false>
+  user       Any::Daemon      undef
+  workdir    Any::Daemon      current working directory
+
+=over 2
+
+=item docroot => URL
+
+The root url of this service. When SSL is used, then the url starts with
+C<https>.
+
+=item group => GID|GROUPNAME
+
+=item host => HOSTNAME:PORT
+
+=item pid_file => FILENAME
+
+=item server_id => STRING
+
+=item socket => SOCKET
+
+=item use_ssl => BOOLEAN
+
+=item user => UID|USERNAME
+
+=item workdir => DIRECTORY
+
+=back
+
+=back
+
+=head2 Accessors
+
+See L<documentation in base class|Any::Daemon/"Accessors">.
+ 
+=over 4
+
+=item $obj-E<gt>B<docroot>()
+
+=item $obj-E<gt>B<host>()
+
+=item $obj-E<gt>B<socket>()
+
+=item $obj-E<gt>B<useSSL>()
+
+=item $obj-E<gt>B<workdir>()
+
+See L<Any::Daemon/"Accessors">
+
+=back
+
+=head2 Action
+
+See L<documentation in base class|Any::Daemon/"Action">.
+ 
+=over 4
+
+=item $obj-E<gt>B<run>(OPTIONS)
+
+ -Option        --Defined in     --Default
+  background      Any::Daemon      <true>
+  child_died      Any::Daemon      spawn new childs
+  child_task      Any::Daemon      <accept http connections>
+  handle_request                   <required>
+  kill_childs     Any::Daemon      send sigterm
+  max_childs      Any::Daemon      10
+  new_connection                   <undef>
+  reconfigure     Any::Daemon      ignore
+
+=over 2
+
+=item background => BOOLEAN
+
+=item child_died => CODE
+
+=item child_task => CODE
+
+=item handle_request => CODE
+
+=item kill_childs => CODE
+
+=item max_childs => INTEGER
+
+=item new_connection => CODE
+
+=item reconfigure => CODE
+
+=back
+
+=back
+
+=head1 SEE ALSO
+
+This module is part of Any-Daemon-HTTP distribution version 0.10,
+built on July 09, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+
+=head1 LICENSE
+
+Copyrights 2013 by [Mark Overmeer]. For other contributors see ChangeLog.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+See F<http://www.perl.com/perl/misc/Artistic.html>
+
