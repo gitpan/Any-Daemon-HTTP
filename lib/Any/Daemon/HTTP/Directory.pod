@@ -1,0 +1,221 @@
+=encoding utf8
+
+=head1 NAME
+
+Any::Daemon::HTTP::Directory - describe a server directory 
+
+=head1 INHERITANCE
+
+ Any::Daemon::HTTP::Directory is extended by
+   Any::Daemon::HTTP::UserDirs
+
+=head1 SYNOPSIS
+
+ # implicit creation of ::Directory object
+ my $vh = Any::Daemon::HTTP::VirtualHost
+   ->new(directories => {path => '/', location => ...})
+
+ my $vh = Any::Daemon::HTTP::VirtualHost
+   ->new(directories => [ \%dir1, \%dir2, $dir_obj ])
+
+ # explicit use
+ my $root = Any::Daemon::HTTP::Directory
+   ->new(path => '/', location => '...');
+ my $vh = Any::Daemon::HTTP::VirtualHost
+   ->new(directories => $root);
+
+=head1 DESCRIPTION
+
+Each L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> will define where the files are
+located.  Parts of the URI path can map on different directories,
+with different permissions.
+
+User directories, like used in the URI C<<http://xx/~user/yy>>
+are implemented in L<Any::Daemon::HTTP::UserDirs|Any::Daemon::HTTP::UserDirs>.
+
+=head1 METHODS
+
+=head2 Constructors
+
+=over 4
+
+=item Any::Daemon::HTTP::Directory-E<gt>B<new>(OPTIONS|HASH-of-OPTIONS)
+
+ -Option        --Default
+  allow           <undef>
+  deny            <undef>
+  directory_list  <false>
+  index_file      ['index.html', 'index.htm']
+  location        <required>
+  path            '/'
+
+=over 2
+
+=item allow => CIDR|HOSTNAME|DOMAIN|CODE|ARRAY
+
+Allow all requests which pass any of these parameters, and none
+of the deny parameters.  See L</Allow access>.
+
+=item deny => CIDR|HOSTNAME|DOMAIN|CODE|ARRAY
+
+See C<allow> and L</Allow access>
+
+=item directory_list => BOOLEAN
+
+Enables the display of a directory, when it does not contain one of the
+C<index_file> prepared defaults.
+
+=item index_file => STRING|ARRAY
+
+When a directory is addressed, it is scanned whether one of these files
+exist.  If so, the content will be shown.
+
+=item location => DIRECTORY|CODE
+
+The absolute prefix DIRECTORY before the path of the URI, or a CODE
+reference which will rewrite the path (only parameter) into the
+absolute file or directory name.
+
+=item path => PATH
+
+If the directory PATH (relative to the document root C<location>) is not
+trailed by a '/', it will be made so.
+
+=back
+
+=back
+
+=head2 Attributes
+
+=over 4
+
+=item $obj-E<gt>B<location>()
+
+=item $obj-E<gt>B<path>()
+
+=back
+
+=head2 Permissions
+
+=over 4
+
+=item $obj-E<gt>B<allow>(CLIENT, SESSION, REQUEST, URI)
+
+BE WARNED that the URI is the rewrite of the REQUEST uri, and therefore
+you should use that URI.  The SESSION represents a user.
+
+See L</Allow access>.
+
+=item $obj-E<gt>B<filename>(PATH)
+
+Convert a URI PATH into a directory path.  Return C<undef> if not possible.
+
+=item $obj-E<gt>B<fromDisk>(SESSION, REQUEST, URI)
+
+Try to produce a response (HTTP::Response) for something inside this
+directory structure.  C<undef> is returned if nothing useful is fount.
+
+=item $obj-E<gt>B<list>(DIRECTORY, OPTIONS)
+
+Returns a HASH with information about the DIRECTORY content.  This may
+be passed into some template or the default template.  See L</Return of
+directoryList> about the returned output.
+
+ -Option       --Default
+  filter         <undef>
+  hide_symlinks  <false>
+  names          <skip hidden files>
+
+=over 2
+
+=item filter => CODE
+
+For each of the selected names (see  C<names> option) the lstat() is
+called.  That data is expanded into a HASH, but not all additional
+fields are yet filled-in (only the ones which come for free).
+
+=item hide_symlinks => BOOLEAN
+
+=item names => CODE|Regexp
+
+Reduce the returned list.  The CODE reference is called with the found
+filename, and should return true when the name is acceptable.  The
+default regexp (on UNIX) is C<< qr/^[^.]/ >>
+
+=back
+
+=back
+
+=head1 DETAILS
+
+=head2 Directory limits
+
+=head3 Allow access
+
+The L<allow()|Any::Daemon::HTTP::Directory/"Permissions"> method handles access rights.  When a trueth value is
+produced, then access is permitted.
+
+The base class implements access rules via the C<allow> or C<deny>
+option of L<new()|Any::Daemon::HTTP::Directory/"Constructors">.  These parameters are exclusive (which is slightly
+different from Apache); you can either allow or deny, but not both at
+the same time.
+
+The parameters to C<allow> or C<deny> are an ARRAY with any combination of
+
+=over 4
+
+=item IPv4 and IPv6 address ranges in CIDR notation
+
+=item hostname
+
+=item domain name (leading dot)
+
+=item your own CODE reference, which will be called with the IP address,
+
+  the hostname, the session, and the rewritten URI.
+
+=back
+
+=head2 Return of list()
+
+The L<list()|Any::Daemon::HTTP::Directory/"Permissions"> method returns a HASH of HASHes, where the
+primary keys are the directory entries, each refering to a HASH
+with details.  It is designed to ease the connection to template
+systems.
+
+The details contain the C<lstat> information plus some additional
+helpers.  The lstat call provides the fields C<dev>, C<ino>, C<mode>,
+C<nlink>, C<uid>, C<gid>, C<rdev>, C<size>,  C<atime>, C<mtime>,
+C<ctime>, C<blksize>, C<blocks> -as far as supported by your OS.
+The entry's C<name> and C<path> are added.
+
+The C<kind> field contains the string C<DIRECTORY>, C<FILE>, C<SYMLINK>,
+or C<OTHER>.  Besides, you get either an C<is_directory>, C<is_file>,
+C<is_symlink>, or C<is_other> field set to true.  Equivalent are:
+
+   if($entry->{kind} eq 'DIRECTORY')
+   if($entry->{is_directory})
+
+It depends on the kind of entry which of the following fields are added
+additionally.  Symlinks will get C<symlink_dest>, C<symlink_dest_exists>.
+Files hace the C<size_nice>, which is the size in pleasant humanly readable
+format.
+
+Files and directories have the C<mtime_nice> (in localtime).  The C<user> and
+C<group> which are textual representations of the numeric uid and gid are
+added.  The C<flags> represents the UNIX standard permission-bit display,
+as produced by the "ls -l" command.
+
+=head1 SEE ALSO
+
+This module is part of Any-Daemon-HTTP distribution version 0.20,
+built on October 11, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+
+=head1 LICENSE
+
+Copyrights 2013 by [Mark Overmeer]. For other contributors see ChangeLog.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+See F<http://www.perl.com/perl/misc/Artistic.html>
+

@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-Any::Daemon::HTTP - preforking HTTP daemon
+Any::Daemon::HTTP - preforking Apache/Plack-like webserver
 
 =head1 INHERITANCE
 
@@ -11,55 +11,125 @@ Any::Daemon::HTTP - preforking HTTP daemon
 
 =head1 SYNOPSIS
 
-  my $http = Any::Daemon::HTTP->new(%opts);
+  #
+  # Simpelest
+  #
+
+  my $http = Any::Daemon::HTTP->new
+    ( handler   => \&handler
+    , host      => 'server.example.com:80'
+    , %daemon_opts
+    );
+
+  sub handler($$$$$)
+  {   my ($server, $client, $request, $vhost, $dir) = @_;
+      return HTTP::Response->new(500);
+  }
+
+  #
+  # Clean style
+  #
+
+  my $http = Any::Daemon::HTTP->new
+    ( host      => 'server.example.com:80'
+    );
+
+  $http->addVirtualHost
+    ( name      => 'www.example.com'
+    , aliases   => 'example.com'
+    , documents => '/www/srv/example.com/http'
+    , handler   => \&handler
+    );
+
+  $http->run;
+
+  #
+  # Limited server
+  #
+
+  my $http = Any::Daemon::HTTP->new
+    ( host      => 'www.example.com'
+    , documents => '/www/srv/example.com/http'
+    , handler   => \&handler
+    , %daemon_opts
+    );
   $http->run;
 
 =head1 DESCRIPTION
 
-This module extends the basic L<Any::Daemon|Any::Daemon> with childs which
-handle http connections.  The HTTP/1.1 protocol implementation of
-HTTP::Daemon is (ab)used.
+This module extends the basic L<Any::Daemon|Any::Daemon> with childs which handle http
+connections.  This daemon does understand virtual hosts, per directory
+configuration, access rules, uri rewritings, and other features of Apache
+and Plack.  But you can also use it for a very simple HTTP server.
+
+The HTTP/1.1 protocol implementation of HTTP::Daemon is (ab)used.
 
 Please support my development work by submitting bug-reports, patches
 and (if available) a donation.
 
-See L<documentation in base class|Any::Daemon/"DESCRIPTION">.
+See L<documentation in the base class|Any::Daemon/"DESCRIPTION">.
  
+=head2 Limitations
+
+=over 4
+
+=item only one socket
+
+You can currently only use one socket, either plain or SSL.
+
+=back
+
 =head1 METHODS
 
-See L<documentation in base class|Any::Daemon/"METHODS">.
+See L<documentation in the base class|Any::Daemon/"METHODS">.
  
 =head2 Constructors
 
-See L<documentation in base class|Any::Daemon/"Constructors">.
+See L<documentation in the base class|Any::Daemon/"Constructors">.
  
 =over 4
 
 =item Any::Daemon::HTTP-E<gt>B<new>(OPTIONS)
 
-See the option descriptions of L<Any::Daemon::new()|Any::Daemon/"Constructors">.
+Also see the option descriptions of L<Any::Daemon::new()|Any::Daemon/"Constructors">.
 
- -Option   --Defined in     --Default
-  docroot                     'http://$host'
-  group      Any::Daemon      undef
-  host                        <from socket>
-  pid_file   Any::Daemon      undef
-  server_id                   <program name>
-  socket                      <created internally>
-  use_ssl                     <false>
-  user       Any::Daemon      undef
-  workdir    Any::Daemon      current working directory
+When C<documents> or C<handler> is passed, then a virtual host will
+be created from that.  It is nicer to create the vhost explicitly.
+If you L<run()|Any::Daemon::HTTP/"Action"> without host or documents or any vhost definition,
+then the defaults are used to create a default vhost.
+
+ -Option          --Defined in     --Default
+  documents                          undef
+  group             Any::Daemon      undef
+  handler                            <undef>
+  handlers                           <undef>
+  host                               <from socket>
+  pid_file          Any::Daemon      undef
+  server_id                          <program name>
+  socket                             <created internally>
+  standard_headers                   []
+  use_ssl                            <false>
+  user              Any::Daemon      undef
+  vhosts                             <default>
+  workdir           Any::Daemon      current working directory
 
 =over 2
 
-=item docroot => URL
+=item documents => DIRECTORY
 
-The root url of this service. When SSL is used, then the url starts with
-C<https>.
+See L<Any::Daemon::HTTP::VirtualHost::new(documents)|Any::Daemon::HTTP::VirtualHost/"Constructors">
 
 =item group => GID|GROUPNAME
 
-=item host => HOSTNAME:PORT
+=item handler => CODE|HASH
+
+Equivalent to C<handlers>.
+
+=item handlers => CODE|HASH
+
+See  L<Any::Daemon::HTTP::VirtualHost::new(handlers)|Any::Daemon::HTTP::VirtualHost/"Constructors">
+
+=item host => HOSTNAME[:PORT]
 
 =item pid_file => FILENAME
 
@@ -67,9 +137,17 @@ C<https>.
 
 =item socket => SOCKET
 
+=item standard_headers => ARRAY
+
 =item use_ssl => BOOLEAN
 
 =item user => UID|USERNAME
+
+=item vhosts => VHOST|HASH-of-OPTIONS|PACKAGE|ARRAY
+
+For OPTIONS, see L<addVirtualHost()|Any::Daemon::HTTP/"Virtual host administration">.  Provide one or an ARRAY of
+virtual host configurations, either by L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost>
+objects or by the OPTIONS to create such objects.
 
 =item workdir => DIRECTORY
 
@@ -79,11 +157,9 @@ C<https>.
 
 =head2 Accessors
 
-See L<documentation in base class|Any::Daemon/"Accessors">.
+See L<documentation in the base class|Any::Daemon/"Accessors">.
  
 =over 4
-
-=item $obj-E<gt>B<docroot>()
 
 =item $obj-E<gt>B<host>()
 
@@ -97,19 +173,41 @@ See L<Any::Daemon/"Accessors">
 
 =back
 
+=head2 Virtual host administration
+
+=over 4
+
+=item $obj-E<gt>B<addVirtualHost>(VHOST|PACKAGE|HASH-of-OPTIONS|OPTIONS)
+
+Adds a new virtual host to the knowledge of the daemon.  Can be used
+at run-time.  See L<Any::Daemon::HTTP::VirtualHost::new()|Any::Daemon::HTTP::VirtualHost/"Constructors"> for OPTIONS.
+The added virtual host object is returned.
+
+=item $obj-E<gt>B<removeVirtualHost>(VHOST|NAME|ALIAS)
+
+Remove all name and alias registrations for the indicated virtual host.
+Silently ignores non-existing vhosts.  The removed virtual host object
+is returned.
+
+=item $obj-E<gt>B<virtualHost>(NAME)
+
+=back
+
 =head2 Action
 
-See L<documentation in base class|Any::Daemon/"Action">.
+See L<documentation in the base class|Any::Daemon/"Action">.
  
 =over 4
 
 =item $obj-E<gt>B<run>(OPTIONS)
 
+When there is no vhost yet, one will be created.  When only one vhost
+is active, you may pass C<handle_request> (see the vhost docs).
+
  -Option        --Defined in     --Default
   background      Any::Daemon      <true>
   child_died      Any::Daemon      spawn new childs
   child_task      Any::Daemon      <accept http connections>
-  handle_request                   <required>
   kill_childs     Any::Daemon      send sigterm
   max_childs      Any::Daemon      10
   new_connection                   <undef>
@@ -123,13 +221,14 @@ See L<documentation in base class|Any::Daemon/"Action">.
 
 =item child_task => CODE
 
-=item handle_request => CODE
-
 =item kill_childs => CODE
 
 =item max_childs => INTEGER
 
 =item new_connection => CODE
+
+The CODE is called on each new connection made.  It gets as parameters
+the server (this object) and the connection (L<Any::Daemon::HTTP::Session|Any::Daemon::HTTP::Session>)
 
 =item reconfigure => CODE
 
@@ -139,8 +238,8 @@ See L<documentation in base class|Any::Daemon/"Action">.
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.10,
-built on July 09, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.20,
+built on October 11, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

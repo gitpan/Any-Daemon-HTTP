@@ -1,4 +1,10 @@
 ===== version history for Any::Daemon::HTTP
 
+version 0.20: Fri Oct 11 12:34:41 CEST 2013
+	Changes:
+	- major rewrite, most existing code will still work.
+	  Much of the code has been taken from HTTP::Server::*, but then
+	  for a non-multiplexing server core.
+
 version 0.10: Tue Jul  9 17:42:29 CEST 2013
-	- initial release (older code)
+	- initial release (the main components of the code are much older)

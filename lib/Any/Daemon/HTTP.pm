@@ -7,17 +7,24 @@ use strict;
 
 package Any::Daemon::HTTP;
 use vars '$VERSION';
-$VERSION = '0.10';
+$VERSION = '0.20';
 
 use base 'Any::Daemon';
 
 use Log::Report    'any-daemon-http';
 
+use Any::Daemon::HTTP::VirtualHost ();
+use Any::Daemon::HTTP::Session  ();
+
 use HTTP::Daemon   ();
+use HTTP::Status   qw/:constants/;  # many HTTP_ constants
 use IO::Socket     qw/SOCK_STREAM SOMAXCONN/;
 use File::Basename qw/basename/;
+use File::Spec     ();
+use Scalar::Util   qw/blessed/;
 
 
+sub _to_list($) { ref $_[0] eq 'ARRAY' ? @{$_[0]} : defined $_[0] ? $_[0] : () }
 sub init($)
 {   my ($self, $args) = @_;
     $self->SUPER::init($args);
@@ -33,7 +40,7 @@ sub init($)
         my $sock_class = $use_ssl ? 'IO::Socket::SSL' : 'IO::Socket::INET';
         eval "require $sock_class" or panic $@;
 
-        $host or error __x"host or socket required for {pkg}::new"
+        $host or error __x"host or socket required for {pkg}::new()"
            , pkg => ref $self;
 
         $socket  = $sock_class->new
@@ -52,13 +59,29 @@ sub init($)
 
     $self->{ADH_conn_class} = $conn_class;
 
-    $self->{ADH_ssl}    = $use_ssl;
-    $self->{ADH_socket} = $socket;
-    $self->{ADH_host}   = $host;
-    $self->{ADH_root}   = $args->{docroot}
-      || ($use_ssl ? 'https' : 'http'). "://$host";
+    $self->{ADH_ssl}     = $use_ssl;
+    $self->{ADH_socket}  = $socket;
+    $self->{ADH_host}    = $host;
 
-    $self->{ADH_server} = $args->{server_id} || basename($0);
+    $self->{ADH_vhosts}  = {};
+    $self->addVirtualHost($_)
+        for _to_list $args->{vhosts};
+
+    !$args->{docroot}
+        or error __x"docroot parameter has been removed in v0.11";
+
+    $self->{ADH_server}  = $args->{server_id} || basename($0);
+    $self->{ADH_headers} = $args->{standard_headers} || [];
+
+    # "handlers" is probably a common typo
+    my $handler = $args->{handler} || $args->{handlers};
+    $self->addVirtualHost
+      ( name      => $host
+      , aliases   => ['default']
+      , documents => $args->{documents}
+      , handler   => $handler
+      ) if $args->{documents} || $handler;
+
     $self;
 }
 
@@ -67,30 +90,118 @@ sub init($)
 sub useSSL() {shift->{ADH_ssl}}
 sub host()   {shift->{ADH_host}}
 sub socket() {shift->{ADH_socket}}
-sub docroot(){shift->{ADH_root}}
 
-#----------------
+#-------------
+
+sub addVirtualHost(@)
+{   my $self   = shift;
+    my $config = @_==1 ? shift : {@_};
+    my $vhost;
+    if(UNIVERSAL::isa($config, 'Any::Daemon::HTTP::VirtualHost'))
+    {   $vhost = $config;
+    }
+    elsif(!ref $config && $config =~ m/\:\:/)
+    {   $vhost = $config->new;
+    }
+    elsif(not UNIVERSAL::isa($config, 'HASH'))
+    {   error __x"virtual configuration not a valid object not HASH";
+    }
+    else
+    {   $vhost = Any::Daemon::HTTP::VirtualHost->new($config);
+    }
+
+    $self->{ADH_vhosts}{$_} = $vhost
+        for $vhost->name, $vhost->aliases;
+    $vhost;
+}
+
+
+sub removeVirtualHost($)
+{   my ($self, $id) = @_;
+    my $vhost = blessed $id && $id->isa('Any::Daemon::HTTP::VirtualHost')
+       ? $id : $self->virtualHost($id);
+    defined $vhost or return;
+
+    delete $self->{ADH_vhosts}{$_}
+        for $vhost->name, $vhost->aliases;
+    $vhost;
+}
+
+
+sub virtualHost($) { $_[0]->{ADH_vhosts}{$_[1]} }
+
+#sub dnslookup($$$)
+#{   my ($self, $session, $ip, $where) = @_;
+#    my $host = $self->{ADH_cache}{$ip} ||=
+#        # must be changed into async lookup!
+#        gethostbyaddr inet_aton($ip), AF_INET;
+#    $$where  = $host;
+#    info $session->id." $ip is $host";
+#}
+
+#-------------------
+
+sub _connection($$)
+{   my ($self, $client, $args) = @_;
+
+    # Ugly hack, steal HTTP::Daemon's http/1.1 implementation
+    bless $client, $self->{ADH_conn_class};
+    ${*$client}{httpd_daemon} = $self;
+
+    my $session = Any::Daemon::HTTP::Session->new(client => $client);
+    info __x"new client from {host} on {ip}"
+       , host => $session->get('peer_host'), ip => $session->get('peer_ip');
+
+    $args->{new_connection}->($self, $session);
+
+    while(my $req  = $client->get_request)
+    {   my $vhostn = $req->header('Host') || 'default';
+        my $vhost  = $vhostn
+            ? $self->virtualHost($vhostn) : $self->virtualHost('default');
+
+        my $resp;
+        if($vhost)
+        {   $self->{ADH_current_vhost} = $vhost;
+            $resp = $vhost->handleRequest($self, $session, $req);
+        }
+        else
+        {   $resp = HTTP::Response->new(HTTP_NOT_ACCEPTABLE,
+               "virtual host $vhostn is not available");
+        }
+
+        unless($resp)
+        {   notice __x"no response produced for {uri}", uri => $req->uri;
+            $resp = HTTP::Response->new(HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        $resp->push_header(@{$self->{ADH_headers}});
+        $resp->request($req);
+
+        $client->send_response($resp);
+    }
+}
 
 sub run(%)
 {   my ($self, %args) = @_;
 
-    my $on_new = delete $args{new_connection} || sub {};
-    my $handle = delete $args{handle_request} or panic;
+    $args{new_connection} ||= sub {};
 
-    $args{child_task} = sub {
+    my $vhosts = $self->{ADH_vhosts};
+    keys %$vhosts
+        or $self->addVirtualHost
+          ( name      => $self->host
+          , aliases   => 'default'
+          );
+
+    # option handle_request is deprecated in 0.11
+    if(my $handler = delete $args{handle_request})
+    {   my (undef, $first) = %$vhosts;
+        $first->addHandler('/' => $handler);
+    }
+
+    $args{child_task} ||=  sub {
         while(my $client = $self->socket->accept)
-        {   info "new client $client using HTTP11";
-
-            # Ugly hack, steal HTTP::Daemon's http/1.1 implementation
-            bless $client, $self->{ADH_conn_class};
-            ${*$client}{httpd_daemon} = $self;
-
-            while(my $request = $client->get_request)
-            {   my $response = $handle->($self, $client, $request);
-                $response or next;
-
-                $client->send_response($response);
-            }
+        {   $self->_connection($client, \%args);
             $client->close;
         }
         exit 0;
@@ -101,7 +212,11 @@ sub run(%)
 
 # HTTP::Daemon methods used by ::ClientConn.  The names are not compatible
 # with MarkOv convention, so hidden for the users of this module
-sub url() {shift->{ADH_docroot}}
+sub url()
+{   my $self  = shift;
+    my $vhost = $self->{ADH_current_vhost} or return undef;
+    ($self->useSSL ? 'https' : 'http').'://'.$vhost->name;
+}
 sub product_tokens() {shift->{ADH_server}}
 
 1;
