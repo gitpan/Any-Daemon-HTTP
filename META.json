@@ -32,7 +32,7 @@
       },
       "runtime" : {
          "requires" : {
-            "Any::Daemon" : "0.91",
+            "Any::Daemon" : "0.92",
             "Encode" : "0",
             "English" : "0",
             "Fcntl" : "0",
@@ -55,5 +55,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "0.20"
+   "version" : "0.21"
 }

@@ -6,10 +6,14 @@ Any::Daemon::HTTP::VirtualHost - webserver virtual hosts
 
 =head1 SYNOPSIS
 
- my $vhost  = Any::Daemon::HTTP::VirtualHost->new(@vhost_opts);
+ my $vhost  = Any::Daemon::HTTP::VirtualHost->new
+  ( directories => ...
+  , rewrite     => ...
+  , handlers    => ...
+  );
  my $daemon = Any::Daemon::HTTP->new
    ( @other_options
-   , vhosts => $vhost  # or \@vhosts
+   , vhosts  => $vhost  # or \@vhosts
    );
 
  # or
@@ -48,6 +52,7 @@ by using these options.
   documents    <undef>
   handlers     {}
   name         <required>
+  redirect     <undef>
   rewrite      <undef>
   user_dirs    undef
 
@@ -71,17 +76,24 @@ option.
 
 The keys are path names, part of the request URIs.  The values are
 CODE-references, called when that URI is addressed.  The access rules
-are taken from the directory definition which is selected by the path,
-for that's all.
-
-The handlers are called with a the client, the
-request (HTTP::Request), uri object (URI).
+are taken from the directory definition which is selected by the path.
+Read L</DETAILS> for the details.
 
 =item name => HOSTNAME
 
-=item rewrite => CODE
+=item redirect => CODE|METHOD|HASH
 
-See L<rewrite()|Any::Daemon::HTTP::VirtualHost/"Basic daemon actions">.
+[0.21] Automatically redirect the browser to some other url, maybe to
+an other host.  Configuration like for C<rewrite>.
+
+=item rewrite => CODE|METHOD|HASH
+
+When a request arrives, the URI can be rewritten to become an other
+request. See L</URI rewrite>.
+
+[0.21] When a METHOD name is specified, that will be called on
+the virtual host object.  An HASH as parameter is interpreted as a
+simple lookup table.
 
 =item user_dirs => undef|OBJECT|HASH
 
@@ -114,8 +126,13 @@ Returns the primary name for this server.
 
 =item $obj-E<gt>B<addHandler>(CODE|(PATH => CODE)-LIST|HASH)
 
-When only CODE is set, then this will be the default handler for all
+Handlers are called to dynamically generate responses, for instance
+to fill-in templates.  The L</DETAILS> section below explains how
+handlers work.
+
+When only CODE is given, then this will be the default handler for all
 paths (under '/', top).  You may also pass a list or HASH of PAIRS.
+[0.21] CODE may also be a method name.
 
 example: 
 
@@ -123,6 +140,13 @@ example:
       '/upload' => \&upload_handler);
 
   $vhost->addHandler(\&default_handler);
+
+  # [0.21] will call $vhost->formHandle
+  $vhost->addHandler('/form' => 'formHandler');
+
+=item $obj-E<gt>B<addHandlers>(PARAMS)
+
+Same as L<addHandler()|Any::Daemon::HTTP::VirtualHost/"Handler">.
 
 =item $obj-E<gt>B<findHandler>(URI|PATH|PATH-SEGMENTS)
 
@@ -146,6 +170,15 @@ BE WARNED that the URI is the rewrite of the REQUEST uri, and therefore
 you should use that URI.  The SESSION represents a user.
 
 See L</Allow access>.
+
+=item $obj-E<gt>B<mustRedirect>(URI)
+
+[0.21] Returns an HTTP::Response object if the URI needs to be
+redirected, according to the vhost configuration.
+
+=item $obj-E<gt>B<redirect>(URI, [HTTP_CODE])
+
+[0.21] Returns an HTTP::Response object of the URI.
 
 =item $obj-E<gt>B<rewrite>(URI)
 
@@ -177,6 +210,76 @@ C<undef> is not possible.
 
 =head1 DETAILS
 
+=head2 Handlers
+
+Handlers are called to dynamically generate responses, for instance
+to fill-in templates.
+
+When a request for an URI is received, it is first checked whether
+a static file can fulfil the request.  If not, a search is started
+for the handler with the longest path.
+
+  # /upload($|/*) goes to the upload_handler
+  $vhost->addHandler
+    ( '/'       => \&default_handler
+    , '/upload' => \&upload_handler
+    );
+
+  # Missing files go to the default_handler
+  # which is actually replacing the existing one
+  $vhost->addHandler(\&default_handler);
+
+  # [0.21] This will call $vhost->formHandle(...), especially
+  # useful in your virtual host sub-class.
+  $vhost->addHandler('/form' => 'formHandler');
+
+The handlers are called with many arguments, and should return an
+HTTP::Response object:
+
+  $vhost->addHandler('/upload' => $handler);
+  my $resp = $hander->($vhost, $session, $req, $uri, $tree);
+
+  $vhost->addHandler('/form' => $method);
+  my $resp = $vhost->$method($session, $req, $uri, $tree);
+
+In which
+
+=over 4
+
+=item * C<$vhost> is an C<Any::Daemon::HTTP::VirtualHost>,
+
+=item * C<$session> is an L<Any::Daemon::HTTP::Session|Any::Daemon::HTTP::Session>,
+
+=item * C<$req> is an HTTP::Request,
+
+=item * C<$uri> an URI after rewrite rules, and
+
+=item * C<$tree> the selected C<Any::Daemon::HTTP::Directory>.
+
+=back
+
+The handler could work like this:
+
+  sub formHandler($$$$)
+  {   my ($vhost, $session, $req, $uri, $tree) = @_;
+      # in OO extended vhosts, then $vhost => $self
+
+      # Decode path parameters in Plack style
+      # ignore two components: '/' and 'form' from the path
+      my (undef, undef, $name, @more) = $uri->path_segments;
+
+      HTTP::Response->new(HTTP_OK, ...);
+  }
+
+=head2 Your virtual host as class
+
+When your virtual host has larger configuration or many handlers --or when
+you like clean programming--, it may be a good choice to put your code
+in a separate package with the normal Object Oriented extension mechanism.
+
+You may need to implement your own information persistence via databases
+or configation files.  For that, extend L<Any::Daemon::HTTP::Session|Any::Daemon::HTTP::Session>.
+
 =head2 URI Rewrite
 
 For each request, the L<rewrite()|Any::Daemon::HTTP::VirtualHost/"Basic daemon actions"> method is called to see whether a
@@ -185,8 +288,8 @@ object (the only parameter) or a new URI object.
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.20,
-built on October 11, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.21,
+built on October 15, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::VirtualHost;
 use vars '$VERSION';
-$VERSION = '0.20';
+$VERSION = '0.21';
 
 use Log::Report    'any-daemon-http';
 
@@ -37,34 +37,48 @@ sub init($)
 
     my $aliases = $args->{aliases}            || [];
     $self->{ADHV_aliases} = ref $aliases eq 'ARRAY' ? $aliases : [$aliases];
-    $self->{ADHV_rewrite} = $args->{rewrite}  || sub {$_[0]};
     $self->{ADHV_dirlist} = $args->{directory_list};
     $self->{ADHV_handlers} = $args->{handler} || $args->{handlers} || {};
+    $self->{ADHV_rewrite}  = $self->_rewrite_call($args->{rewrite});
+    $self->{ADHV_redirect} = $self->_redirect_call($args->{redirect});
+    $self->{ADHV_udirs}    = $self->_user_dirs($args->{user_dirs});
 
     $self->{ADHV_dirs}     = {};
-    if(my $docroot = $args->{documents})
-    {   File::Spec->file_name_is_absolute($docroot)
-            or error __x"vhost {name} documents directory must be absolute"
-                 , name => $name;
-        -d $docroot
-            or error __x"vhost {name} documents `{dir}' must point to dir"
-                 , name => $name, dir => $docroot;
-        $docroot =~ s/\\$//; # strip trailing / if present
-        $self->addDirectory(path => '/', location => $docroot);
-    }
+    $self->_auto_docs($args->{documents});
     my $dirs = $args->{directories} || [];
     $self->addDirectory($_) for ref $dirs eq 'ARRAY' ? @$dirs : $dirs;
 
-    if(my $ud = $args->{user_dirs})
-    {   if(ref $ud eq 'HASH')
-        {   $ud = Any::Daemon::HTTP::UserDirs->new($ud) }
-        elsif(! $ud->isa('Any::Daemon::HTTP::UserDirs'))
-        {   error __x"vhost {name} user_dirs is not an ::UserDirs object"
-              , name => $self->name;
-        }
-        $self->{ADHV_udirs} = $ud;
-    }
     $self;
+}
+
+sub _user_dirs($)
+{   my ($self, $dirs) = @_;
+    $dirs or return undef;
+
+    return Any::Daemon::HTTP::UserDirs->new($dirs)
+        if ref $dirs eq 'HASH';
+
+    return $dirs
+        if $dirs->isa('Any::Daemon::HTTP::UserDirs');
+
+    error __x"vhost {name} user_dirs is not an ::UserDirs object"
+      , name => $self->name;
+}
+
+sub _auto_docs($)
+{   my ($self, $docroot) = @_;
+    $docroot or return;
+
+    File::Spec->file_name_is_absolute($docroot)
+        or error __x"vhost {name} documents directory must be absolute"
+             , name => $self->name;
+
+    -d $docroot
+        or error __x"vhost {name} documents `{dir}' must point to dir"
+             , name => $self->name, dir => $docroot;
+
+    $docroot =~ s/\\$//; # strip trailing / if present
+    $self->addDirectory(path => '/', location => $docroot);
 }
 
 #---------------------
@@ -84,14 +98,26 @@ sub addHandler(@)
     my $h = $self->{ADHV_handlers} ||= {};
     while(@pairs)
     {   my $k    = shift @pairs;
-        index($k, 0, 1) eq '/'
+        substr($k, 0, 1) eq '/'
             or error __x"handler path must be absolute, for {rel} in {vhost}"
-                 , rel => $k, vhost => $self->host;
+                 , rel => $k, vhost => $self->name;
 
-        $h->{$k} = shift @pairs;
+        my $v    = shift @pairs;
+        unless(ref $v)
+        {   my $method = $v;
+            $self->can($method)
+                or error __x"handler method {name} not provided by {vhost}"
+                    , name => $method, vhost => ref $self;
+            $v = sub { shift->$method(@_) };
+        }
+
+        $h->{$k} = $v;
     }
     $h;
 }
+
+
+*addHandlers = \&addHandler;
 
 
 sub findHandler(@)
@@ -117,22 +143,103 @@ sub handleRequest($$$;$)
 
     $uri      ||= $req->uri;
     my $new_uri = $self->rewrite($uri);
+
+    if(my $redir = $self->mustRedirect($new_uri))
+    {   return $redir;
+    }
+
     if($new_uri ne $uri)
-    {   info $req->id." rewritten to $uri";
-        return HTTP::Response->new(HTTP_TEMPORARY_REDIRECT
-           , '', [Location => $uri]);
+    {   info __x"{vhost} rewrote {uri} into {new}"
+          , vhost => $self->name, uri => $uri, new => $new_uri;
+        $uri = $new_uri;
     }
 
     my $path = $uri->path;
+    info __x"{vhost} request {path}", vhost => $self->name, path => $uri->path;
+
     my @path = $uri->path_segments;
     my $tree = $self->directoryOf(@path);
-    my $resp = $tree ? $tree->fromDisk($session, $req, $uri) : undef;
-    $resp || $self->findHandler(@path)->($session, $req, $uri, $self, $tree);
+    my $resp = $tree->fromDisk($session, $req, $uri) if $tree;
+
+    $resp  ||= $self->findHandler(@path)->($self, $session, $req, $uri, $tree);
+    $resp;
 }
 
 #----------------------
 
-sub rewrite($) { $_[0]->{ADHV_rewrite}->($_[1]) }
+sub rewrite($) { $_[0]->{ADHV_rewrite}->(@_) }
+
+sub _rewrite_call($)
+{   my ($self, $rew) = @_;
+    $rew or return sub { $_[1] };
+    return $rew if ref $rew eq 'CODE';
+
+    if(ref $rew eq 'HASH')
+    {   my %lookup = %$rew;
+        return sub {
+            my $uri = $_[1]            or return undef;
+            exists $lookup{$uri->path} or return $uri;
+            URI->new_abs($lookup{$uri->path}, $uri)
+        };
+    }
+
+    if(!ref $rew)
+    {   return sub {shift->$rew(@_)}
+            if $self->can($rew);
+
+        error __x"rewrite rule method {name} in {vhost} does not exist"
+          , name => $rew, vhost => $self->name;
+    }
+
+    error __x"unknown rewrite rule type {ref} in {vhost}"
+      , ref => (ref $rew || $rew), vhost => $self->name;
+}
+
+
+sub redirect($;$)
+{   my ($self, $uri, $code) = @_;
+    HTTP::Response->new($code//HTTP_TEMPORARY_REDIRECT, undef
+      , [ Location => "$uri" ]
+    );
+}
+
+
+sub mustRedirect($)
+{   my ($self, $uri) = @_;
+    my $new_uri = $self->{ADHV_redirect}->($self, $uri);
+    $new_uri && $new_uri ne $uri or return;
+
+    info __x"{vhost} redirecting {uri} to {new}"
+      , vhost => $self->name, uri => $uri->path, new => "$new_uri";
+
+    $self->redirect($new_uri);
+}
+
+sub _redirect_call($)
+{   my ($self, $red) = @_;
+    $red or return sub { $_[1] };
+    return $red if ref $red eq 'CODE';
+
+    if(ref $red eq 'HASH')
+    {   my %lookup = %$red;
+        return sub {
+            my $uri = $_[1]            or return undef;
+            exists $lookup{$uri->path} or return undef;
+            URI->new_abs($lookup{$uri->path}, $uri);
+        };
+    }
+
+    if(!ref $red)
+    {   return sub {shift->$red(@_)}
+            if $self->can($red);
+
+        error __x"redirect rule method {name} in {vhost} does not exist"
+          , name => $red, vhost => $self->name;
+    }
+
+    error __x"unknown redirect rule type {ref} in {vhost}"
+      , ref => (ref $red || $red), vhost => $self->name;
+}
 
 
 sub allow($$$)
@@ -165,6 +272,10 @@ sub addDirectory(@)
     !exists $self->{ADHV_dirs}{$path}
         or error __x"vhost {name} directory `{path}' defined twice"
              , name => $self->name, path => $path;
+
+    info __x"add directory configuration to {vhost} for {path}"
+      , vhost => $self->name, path => $path;
+
     $self->{ADHV_dirs}{$path} = $dir;
 }
 

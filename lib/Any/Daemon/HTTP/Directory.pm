@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::Directory;
 use vars '$VERSION';
-$VERSION = '0.20';
+$VERSION = '0.21';
 
 use Log::Report  'any-daemon-http';
 
@@ -47,9 +47,7 @@ sub init($)
         undef $loc;
     }
     else
-    {   File::Spec->file_name_is_absolute($loc)
-           or error __x"directory location {loc} for path {path} not absolute"
-                , loc => $loc, path => $path;
+    {   $loc = File::Spec->rel2abs($loc);
         substr($loc, -1) eq '/' or $loc .= '/';
         $trans = _filename_trans $path, $loc;
 
@@ -67,7 +65,7 @@ sub init($)
     my $if = $args->{index_file};
     my @if = ref $if eq 'ARRAY' ? @$if
            : defined $if        ? $if
-           : qw/index.html index.html/;
+           : qw/index.html index.htm/;
     $self->{ADHD_indexfns} = \@if;
     $self;
 }
@@ -92,8 +90,8 @@ sub allow($$$$)
 
 sub _allow_match($$$$)
 {   my ($self, $session, $uri, $rules) = @_;
-    my ($ip, $host) = $session->get(qw/peer_ip peer_host/);
-    first { $_->($ip, $host, $session, $uri) } @$rules;
+    my $peer = $session->get('peer');
+    first { $_->($peer->{ip}, $peer->{host}, $session, $uri) } @$rules;
 }
 
 sub _allow_cleanup($)

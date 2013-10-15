@@ -59,7 +59,7 @@ Any::Daemon::HTTP - preforking Apache/Plack-like webserver
 
 This module extends the basic L<Any::Daemon|Any::Daemon> with childs which handle http
 connections.  This daemon does understand virtual hosts, per directory
-configuration, access rules, uri rewritings, and other features of Apache
+configuration, access rules, uri rewrites, and other features of Apache
 and Plack.  But you can also use it for a very simple HTTP server.
 
 The HTTP/1.1 protocol implementation of HTTP::Daemon is (ab)used.
@@ -71,11 +71,16 @@ See L<documentation in the base class|Any::Daemon/"DESCRIPTION">.
  
 =head2 Limitations
 
+Of course, the wishlist (of missing features) is quite long.  To list
+the most important limitations of the current implementation:
+
 =over 4
 
 =item only one socket
 
 You can currently only use one socket, either plain or SSL.
+
+=item no proxy support
 
 =back
 
@@ -101,13 +106,15 @@ then the defaults are used to create a default vhost.
  -Option          --Defined in     --Default
   documents                          undef
   group             Any::Daemon      undef
-  handler                            <undef>
-  handlers                           <undef>
+  handler                            undef
+  handlers                           undef
   host                               <from socket>
+  on_error                           undef
   pid_file          Any::Daemon      undef
   server_id                          <program name>
+  session_class                      Any::Daemon::HTTP::Session
   socket                             <created internally>
-  standard_headers                   []
+  standard_headers                   [ ]
   use_ssl                            <false>
   user              Any::Daemon      undef
   vhosts                             <default>
@@ -131,13 +138,28 @@ See  L<Any::Daemon::HTTP::VirtualHost::new(handlers)|Any::Daemon::HTTP::VirtualH
 
 =item host => HOSTNAME[:PORT]
 
+=item on_error => CODE
+
+[0.21] This handler is called when an 4xx or 5xx error response has
+been produced.  The result of this function should be the new response
+(may be the same as the incoming)
+
 =item pid_file => FILENAME
 
 =item server_id => STRING
 
+=item session_class => PACKAGE
+
+[0.21] The PACKAGE must extend the default class.  The extended class may
+be used to implement loading and saving session information, or adding
+abstraction.
+
 =item socket => SOCKET
 
 =item standard_headers => ARRAY
+
+Pass a list of key-value pairs which will be added to each produced
+response.  They are fed into HTTP::Headers subroutine push_header.
 
 =item use_ssl => BOOLEAN
 
@@ -177,11 +199,42 @@ See L<Any::Daemon/"Accessors">
 
 =over 4
 
-=item $obj-E<gt>B<addVirtualHost>(VHOST|PACKAGE|HASH-of-OPTIONS|OPTIONS)
+=item $obj-E<gt>B<addVirtualHost>(VHOST|HASH-of-OPTIONS|OPTIONS)
 
 Adds a new virtual host to the knowledge of the daemon.  Can be used
-at run-time.  See L<Any::Daemon::HTTP::VirtualHost::new()|Any::Daemon::HTTP::VirtualHost/"Constructors"> for OPTIONS.
-The added virtual host object is returned.
+at run-time, until the daemon goes into 'run' mode (starts forking
+childs)  The added virtual host object is returned.
+
+The VHOST is an already prepared VirtualHost object.  With a (HASH-of)
+OPTIONS, the VirtualHost object gets created for you with those OPTIONS.
+See L<Any::Daemon::HTTP::VirtualHost::new()|Any::Daemon::HTTP::VirtualHost/"Constructors"> for OPTIONS.
+
+See the manual page for L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> on how you
+can cleanly extend the class for your own purpose.
+
+example: 
+
+  # Simple version
+  $http->addVirtualHost
+    ( name      => 'images'
+    , aliases   => 'images.example.com'
+    , documents => '/home/www/images
+    );
+
+  # Own virtual host, usually in separate pm-file
+  { package My::VHost;
+    use parent 'Any::Daemon::HTTP::VirtualHost';
+    ...
+  }
+  my $vhost = My::VHost->new(...);
+  $http->addVirtualHost($vhost);
+
+  # Implicitly add virtual hosts
+  push @vhosts, $vhost;
+  my $http = Any::Daemon::HTTP->new
+    ( ...
+    , vhosts    => \@vhosts
+    );
 
 =item $obj-E<gt>B<removeVirtualHost>(VHOST|NAME|ALIAS)
 
@@ -190,6 +243,9 @@ Silently ignores non-existing vhosts.  The removed virtual host object
 is returned.
 
 =item $obj-E<gt>B<virtualHost>(NAME)
+
+Find the virtual host with the NAME or alias.  Returns the
+L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> or C<undef>.
 
 =back
 
@@ -228,7 +284,8 @@ is active, you may pass C<handle_request> (see the vhost docs).
 =item new_connection => CODE
 
 The CODE is called on each new connection made.  It gets as parameters
-the server (this object) and the connection (L<Any::Daemon::HTTP::Session|Any::Daemon::HTTP::Session>)
+the server (this object) and the connection (an
+L<Any::Daemon::HTTP::Session|Any::Daemon::HTTP::Session> extension)
 
 =item reconfigure => CODE
 
@@ -238,8 +295,8 @@ the server (this object) and the connection (L<Any::Daemon::HTTP::Session|Any::D
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.20,
-built on October 11, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.21,
+built on October 15, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

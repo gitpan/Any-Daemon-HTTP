@@ -7,17 +7,17 @@ use strict;
 
 package Any::Daemon::HTTP;
 use vars '$VERSION';
-$VERSION = '0.20';
+$VERSION = '0.21';
 
 use base 'Any::Daemon';
 
 use Log::Report    'any-daemon-http';
 
 use Any::Daemon::HTTP::VirtualHost ();
-use Any::Daemon::HTTP::Session  ();
+use Any::Daemon::HTTP::Session     ();
 
 use HTTP::Daemon   ();
-use HTTP::Status   qw/:constants/;  # many HTTP_ constants
+use HTTP::Status   qw/:constants :is/;
 use IO::Socket     qw/SOCK_STREAM SOMAXCONN/;
 use File::Basename qw/basename/;
 use File::Spec     ();
@@ -56,8 +56,10 @@ sub init($)
     {   $conn_class .= '::SSL';
         eval "require $conn_class" or panic $@;
     }
-
     $self->{ADH_conn_class} = $conn_class;
+
+    $self->{ADH_session_class}
+      = $args->{session_class} || 'Any::Daemon::HTTP::Session';
 
     $self->{ADH_ssl}     = $use_ssl;
     $self->{ADH_socket}  = $socket;
@@ -72,6 +74,7 @@ sub init($)
 
     $self->{ADH_server}  = $args->{server_id} || basename($0);
     $self->{ADH_headers} = $args->{standard_headers} || [];
+    $self->{ADH_error}   = $args->{on_error}  || sub { $_[1] };
 
     # "handlers" is probably a common typo
     my $handler = $args->{handler} || $args->{handlers};
@@ -100,18 +103,18 @@ sub addVirtualHost(@)
     if(UNIVERSAL::isa($config, 'Any::Daemon::HTTP::VirtualHost'))
     {   $vhost = $config;
     }
-    elsif(!ref $config && $config =~ m/\:\:/)
-    {   $vhost = $config->new;
-    }
-    elsif(not UNIVERSAL::isa($config, 'HASH'))
-    {   error __x"virtual configuration not a valid object not HASH";
-    }
-    else
+    elsif(UNIVERSAL::isa($config, 'HASH'))
     {   $vhost = Any::Daemon::HTTP::VirtualHost->new($config);
     }
+    else
+    {   error __x"virtual configuration not a valid object not HASH";
+    }
+
+    info __x"adding virtual host {name}", name => $vhost->name;
 
     $self->{ADH_vhosts}{$_} = $vhost
         for $vhost->name, $vhost->aliases;
+
     $vhost;
 }
 
@@ -130,15 +133,6 @@ sub removeVirtualHost($)
 
 sub virtualHost($) { $_[0]->{ADH_vhosts}{$_[1]} }
 
-#sub dnslookup($$$)
-#{   my ($self, $session, $ip, $where) = @_;
-#    my $host = $self->{ADH_cache}{$ip} ||=
-#        # must be changed into async lookup!
-#        gethostbyaddr inet_aton($ip), AF_INET;
-#    $$where  = $host;
-#    info $session->id." $ip is $host";
-#}
-
 #-------------------
 
 sub _connection($$)
@@ -148,9 +142,10 @@ sub _connection($$)
     bless $client, $self->{ADH_conn_class};
     ${*$client}{httpd_daemon} = $self;
 
-    my $session = Any::Daemon::HTTP::Session->new(client => $client);
+    my $session = $self->{ADH_session_class}->new(client => $client);
+    my $peer    = $session->get('peer');
     info __x"new client from {host} on {ip}"
-       , host => $session->get('peer_host'), ip => $session->get('peer_ip');
+       , host => $peer->{host}, ip => $peer->{ip};
 
     $args->{new_connection}->($self, $session);
 
@@ -176,6 +171,12 @@ sub _connection($$)
 
         $resp->push_header(@{$self->{ADH_headers}});
         $resp->request($req);
+
+        # No content, then produce something better than an empty page.
+        if(is_error($resp->code))
+        {   $resp = $self->{ADH_error}->($self, $resp, $session, $req);
+            $resp->content or $resp->content($resp->status_line);
+        }
 
         $client->send_response($resp);
     }

@@ -7,7 +7,7 @@ use warnings;
 
 package Any::Daemon::HTTP::Session;
 use vars '$VERSION';
-$VERSION = '0.20';
+$VERSION = '0.21';
 
 
 use Log::Report    'any-daemon-http';
@@ -19,10 +19,11 @@ sub new(%)  {my $class = shift; (bless {}, $class)->init({@_})}
 sub init($)
 {   my ($self, $args) = @_;
     my $client = $self->{ADHC_store} = $args->{client} or panic;
-
     my $store  = $self->{ADHC_store} = $args->{store} || {};
-    my $ip     = $store->{peer_ip} = $client->peerhost;
-    $store->{peer_host} = gethostbyaddr inet_aton($ip), AF_INET;
+
+    my $peer   = $store->{peer}    ||= {};
+    my $ip     = $peer->{ip}       ||= $client->peerhost;
+    $peer->{host} = gethostbyaddr inet_aton($ip), AF_INET;
 
     $self;
 }

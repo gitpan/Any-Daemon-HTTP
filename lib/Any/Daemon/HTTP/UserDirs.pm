@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::UserDirs;
 use vars '$VERSION';
-$VERSION = '0.20';
+$VERSION = '0.21';
 
 use parent 'Any::Daemon::HTTP::Directory';
 
