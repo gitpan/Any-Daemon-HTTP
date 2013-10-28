@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::VirtualHost;
 use vars '$VERSION';
-$VERSION = '0.21';
+$VERSION = '0.22';
 
 use Log::Report    'any-daemon-http';
 
@@ -16,10 +16,10 @@ use Any::Daemon::HTTP::UserDirs;
 
 use HTTP::Status qw/:constants/;
 use List::Util   qw/first/;
-use English      qw/$EUID/;
 use File::Spec   ();
 use POSIX        qw(strftime);
 use Scalar::Util qw(blessed);
+use Digest::MD5  qw(md5_base64);
 
 
 sub new(@)
@@ -36,8 +36,7 @@ sub init($)
         or error __x"virtual host {pkg} has no name", pkg => ref $self;
 
     my $aliases = $args->{aliases}            || [];
-    $self->{ADHV_aliases} = ref $aliases eq 'ARRAY' ? $aliases : [$aliases];
-    $self->{ADHV_dirlist} = $args->{directory_list};
+    $self->{ADHV_aliases}  = ref $aliases eq 'ARRAY' ? $aliases : [$aliases];
     $self->{ADHV_handlers} = $args->{handler} || $args->{handlers} || {};
     $self->{ADHV_rewrite}  = $self->_rewrite_call($args->{rewrite});
     $self->{ADHV_redirect} = $self->_redirect_call($args->{redirect});
@@ -159,9 +158,25 @@ sub handleRequest($$$;$)
 
     my @path = $uri->path_segments;
     my $tree = $self->directoryOf(@path);
-    my $resp = $tree->fromDisk($session, $req, $uri) if $tree;
 
-    $resp  ||= $self->findHandler(@path)->($self, $session, $req, $uri, $tree);
+    # static content?
+    my $resp = $tree->fromDisk($session, $req, $uri);
+    return $resp if $resp;
+
+    # dynamic content
+    $resp = $self->findHandler(@path)->($self, $session, $req, $uri, $tree);
+    $resp or return HTTP::Response->new(HTTP_NO_CONTENT);
+
+    $resp->code eq HTTP_OK
+        or return $resp;
+
+    # cache dynamic content based on md5 checksum
+    my $etag     = md5_base64 ${$resp->content_ref};
+    my $has_etag = $req->headers->header('ETag');
+    return HTTP::Response->new(HTTP_NOT_MODIFIED, 'cached dynamic data')
+        if $has_etag && $has_etag eq $etag;
+
+    $resp->headers->header(ETag => $etag);
     $resp;
 }
 
@@ -239,19 +254,6 @@ sub _redirect_call($)
 
     error __x"unknown redirect rule type {ref} in {vhost}"
       , ref => (ref $red || $red), vhost => $self->name;
-}
-
-
-sub allow($$$)
-{   my ($self, $session, $req, $uri) = @_;
-
-    if($EUID==0 && substr($uri->path, 0, 2) eq '/~')
-    {   notice __x"daemon running as root, only access to {path}"
-          , path => '/~user';
-        return 0;
-    }
-
-    1;
 }
 
 #------------------

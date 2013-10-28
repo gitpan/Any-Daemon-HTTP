@@ -7,7 +7,7 @@ use warnings;
 
 package Any::Daemon::HTTP::Session;
 use vars '$VERSION';
-$VERSION = '0.21';
+$VERSION = '0.22';
 
 
 use Log::Report    'any-daemon-http';
@@ -33,5 +33,8 @@ sub init($)
 sub client() {shift->{ADHC_client}}
 sub get(@)   {my $s = shift->{ADHC_store}; wantarray ? @{$s}{@_} : $s->{$_[0]}}
 sub set($$)  {$_[0]->{ADHC_store}{$_[1]} = $_[2]}
+
+# should not be used
+sub _store() {shift->{ADHC_store}}
 
 1;

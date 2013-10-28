@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP;
 use vars '$VERSION';
-$VERSION = '0.21';
+$VERSION = '0.22';
 
 use base 'Any::Daemon';
 
@@ -48,6 +48,7 @@ sub init($)
           , Listen    => SOMAXCONN
           , Reuse     => 1
           , Type      => SOCK_STREAM
+          , Proto     => 'tcp'
           ) or fault "cannot create socket at $host";
     }
 
@@ -60,6 +61,8 @@ sub init($)
 
     $self->{ADH_session_class}
       = $args->{session_class} || 'Any::Daemon::HTTP::Session';
+    $self->{ADH_vhost_class}
+      = $args->{vhost_class}   || 'Any::Daemon::HTTP::VirtualHost';
 
     $self->{ADH_ssl}     = $use_ssl;
     $self->{ADH_socket}  = $socket;
@@ -104,7 +107,7 @@ sub addVirtualHost(@)
     {   $vhost = $config;
     }
     elsif(UNIVERSAL::isa($config, 'HASH'))
-    {   $vhost = Any::Daemon::HTTP::VirtualHost->new($config);
+    {   $vhost = $self->{ADH_vhost_class}->new($config);
     }
     else
     {   error __x"virtual configuration not a valid object not HASH";
@@ -144,8 +147,15 @@ sub _connection($$)
 
     my $session = $self->{ADH_session_class}->new(client => $client);
     my $peer    = $session->get('peer');
-    info __x"new client from {host} on {ip}"
-       , host => $peer->{host}, ip => $peer->{ip};
+    my ($host, $ip) = @{$peer}{'host', 'ip'};
+    info __x"new client from {host} on {ip}", host => $host, ip => $ip;
+
+    # Change title in ps-table
+    my $title = $0;
+    $title    =~ s/ .*//;
+    $title   .= " http from $host";
+    $title   .= " ip $ip" if $ip ne $host;
+    $0        = $title;
 
     $args->{new_connection}->($self, $session);
 
@@ -200,10 +210,17 @@ sub run(%)
         $first->addHandler('/' => $handler);
     }
 
+    my $title        = $0;
+    $title           =~ s/ .*//;
+    my $conn_count   = 0;
     $args{child_task} ||=  sub {
+        $0 = "$title unused";
+       
         while(my $client = $self->socket->accept)
-        {   $self->_connection($client, \%args);
+        {   $conn_count++;
+            $self->_connection($client, \%args);
             $client->close;
+            $0 = "$title idle after $conn_count";
         }
         exit 0;
     };
@@ -221,3 +238,5 @@ sub url()
 sub product_tokens() {shift->{ADH_server}}
 
 1;
+
+__END__

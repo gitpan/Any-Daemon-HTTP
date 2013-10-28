@@ -7,12 +7,13 @@ use strict;
 
 package Any::Daemon::HTTP::Directory;
 use vars '$VERSION';
-$VERSION = '0.21';
+$VERSION = '0.22';
 
 use Log::Report  'any-daemon-http';
 
 use Net::CIDR      qw/cidrlookup/;
 use File::Spec     ();
+use File::Basename qw/dirname/;
 use Fcntl          qw/:mode/;
 use POSIX          qw/strftime/;
 use HTTP::Status   qw/:constants/;
@@ -125,7 +126,6 @@ sub _filename_trans($$)
 sub fromDisk($$$)
 {   my ($self, $session, $req, $uri) = @_;
 
-    # first check access rights
     $self->allow($session, $req, $uri)
         or return HTTP::Response->new(HTTP_FORBIDDEN);
 
@@ -161,13 +161,21 @@ sub _file_response($$)
     -f $fn
         or return HTTP::Response->new(HTTP_NOT_FOUND);
 
-    my $mtime     = (stat $fn)[9];
-    my $has_mtime = $req->if_modified_since;
-    return HTTP::Response->new(HTTP_NOT_MODIFIED)
-        if defined $has_mtime && $has_mtime >= $mtime;
-
     open my($fh), '<:raw', $fn
         or return HTTP::Response->new(HTTP_FORBIDDEN);
+
+    my ($dev, $inode, $mtime) = (stat $fh)[0,1,9];
+    my $etag      = "$dev-$inode-$mtime";
+
+    my $has_etag  = $req->header('If-None_Match');
+    return HTTP::Response->new(HTTP_NOT_MODIFIED, 'match etag')
+        if defined $has_etag && $has_etag eq $etag;
+
+    my $has_mtime = $req->if_modified_since;
+    return HTTP::Response->new(HTTP_NOT_MODIFIED, 'unchanged')
+        if defined $has_mtime && $has_mtime >= $mtime;
+
+    my $head = HTTP::Headers->new;
 
     my $ct;
     if(my $mime = $mimetypes->mimeTypeOf($fn))
@@ -178,10 +186,13 @@ sub _file_response($$)
     {   $ct  = 'binary/octet-stream';
     }
 
+    $head->content_type($ct);
+    $head->last_modified($mtime);
+    $head->header(ETag => $etag);
+
     local $/;
-    my $resp = HTTP::Response
-       ->new(HTTP_OK, undef, ['Content-Type' => $ct], <$fh>);
-    $resp->last_modified($mtime);
+    my $resp = HTTP::Response->new(HTTP_OK, undef, $head, <$fh>);
+
     $resp;
 }
 

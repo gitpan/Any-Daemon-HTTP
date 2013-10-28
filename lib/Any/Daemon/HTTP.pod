@@ -67,23 +67,10 @@ The HTTP/1.1 protocol implementation of HTTP::Daemon is (ab)used.
 Please support my development work by submitting bug-reports, patches
 and (if available) a donation.
 
+See L</DETAILS> for a list of features and limitations.
+
 See L<documentation in the base class|Any::Daemon/"DESCRIPTION">.
  
-=head2 Limitations
-
-Of course, the wishlist (of missing features) is quite long.  To list
-the most important limitations of the current implementation:
-
-=over 4
-
-=item only one socket
-
-You can currently only use one socket, either plain or SSL.
-
-=item no proxy support
-
-=back
-
 =head1 METHODS
 
 See L<documentation in the base class|Any::Daemon/"METHODS">.
@@ -117,6 +104,7 @@ then the defaults are used to create a default vhost.
   standard_headers                   [ ]
   use_ssl                            <false>
   user              Any::Daemon      undef
+  vhost_class                        Any::Daemon::HTTP::VirtualHost
   vhosts                             <default>
   workdir           Any::Daemon      current working directory
 
@@ -164,6 +152,12 @@ response.  They are fed into HTTP::Headers subroutine push_header.
 =item use_ssl => BOOLEAN
 
 =item user => UID|USERNAME
+
+=item vhost_class => PACKAGE
+
+[0.22] The PACKAGE must extend the default class.  See the
+L<Any::Daemon::HTTP::VirtualHost/DETAILS> about creating your own virtual
+hosts.
 
 =item vhosts => VHOST|HASH-of-OPTIONS|PACKAGE|ARRAY
 
@@ -293,10 +287,87 @@ L<Any::Daemon::HTTP::Session|Any::Daemon::HTTP::Session> extension)
 
 =back
 
+=head1 DETAILS
+
+=head2 Server supported features
+
+Many often used features are supported
+
+=over 4
+
+=item * HTTP/1.1 protocol
+
+Supported by via the HTTP::Daemon connection implementation, which
+is gracefully hijacked.  Messages are HTTP::Request and HTTP::Response
+objects, borrowed from LWP.
+
+=item * virtual hosts
+
+Multiple "hosts" listening on the same port, abstracted in
+L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> objects.  The vhosts have a
+name and may have a number of aliases.
+
+=item * directories per VirtualHost 
+
+One or more "directory" configurations may be added, which may be
+nested.  They are represened by a L<Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory> objects.
+Each "directory" maps a "path" in the request to a directory on disk.  
+
+=item * allow/deny per Directory
+
+Supports CIDR and hostname based access restrictions.
+
+=item * directory lists per Directory
+
+When permitted and no C<index.html> file is found, a listing is generated.
+
+=item * user directories per VirtualHost 
+
+One directory object can be a L<Any::Daemon::HTTP::UserDirs|Any::Daemon::HTTP::UserDirs>, managing
+user directories (request paths which start with C</~$username>)
+
+=item * static content caching
+
+Reduce retransmitting files, supporting C<ETag> and C<Last-Modified>.
+
+=item * rewrite rules per VirtualHost
+
+Translate incoming request paths into new paths in the same vhost.
+
+=item * redirection rules per VirtualHost
+
+Translate incoming request paths into browser redirects.
+
+=item * dynamic content handlers per VirtualHost
+
+When there is no matching file, a handler will be called to produce the
+required information.  The default handler will produce 404 errors.
+
+=item * dynamic content caching
+
+Reduce transmitting dynamic content using C<ETag> and C<MD5>'s
+
+=back
+
+=head2 Server limitations
+
+Of course, the wishlist (of missing features) is quite long.  To list
+the most important limitations of the current implementation:
+
+=over 4
+
+=item * only one socket
+
+You can currently only use one socket, either plain or SSL.
+
+=item * no proxy support
+
+=back
+
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.21,
-built on October 15, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.22,
+built on October 28, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

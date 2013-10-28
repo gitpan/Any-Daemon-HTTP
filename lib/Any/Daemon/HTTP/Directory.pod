@@ -54,7 +54,9 @@ are implemented in L<Any::Daemon::HTTP::UserDirs|Any::Daemon::HTTP::UserDirs>.
 =item allow => CIDR|HOSTNAME|DOMAIN|CODE|ARRAY
 
 Allow all requests which pass any of these parameters, and none
-of the deny parameters.  See L</Allow access>.
+of the deny parameters.  See L</Allow access>.  B<Be warned> that
+the access rights are not inherited from directory configurations
+encapsulating this one.
 
 =item deny => CIDR|HOSTNAME|DOMAIN|CODE|ARRAY
 
@@ -99,7 +101,7 @@ trailed by a '/', it will be made so.
 
 =over 4
 
-=item $obj-E<gt>B<allow>(CLIENT, SESSION, REQUEST, URI)
+=item $obj-E<gt>B<allow>(SESSION, REQUEST, URI)
 
 BE WARNED that the URI is the rewrite of the REQUEST uri, and therefore
 you should use that URI.  The SESSION represents a user.
@@ -113,7 +115,7 @@ Convert a URI PATH into a directory path.  Return C<undef> if not possible.
 =item $obj-E<gt>B<fromDisk>(SESSION, REQUEST, URI)
 
 Try to produce a response (HTTP::Response) for something inside this
-directory structure.  C<undef> is returned if nothing useful is fount.
+directory structure.  C<undef> is returned if nothing useful is found.
 
 =item $obj-E<gt>B<list>(DIRECTORY, OPTIONS)
 
@@ -155,10 +157,11 @@ default regexp (on UNIX) is C<< qr/^[^.]/ >>
 The L<allow()|Any::Daemon::HTTP::Directory/"Permissions"> method handles access rights.  When a trueth value is
 produced, then access is permitted.
 
-The base class implements access rules via the C<allow> or C<deny>
-option of L<new()|Any::Daemon::HTTP::Directory/"Constructors">.  These parameters are exclusive (which is slightly
-different from Apache); you can either allow or deny, but not both at
-the same time.
+The base class implements access rules via the C<allow> or C<deny> option
+of L<new()|Any::Daemon::HTTP::Directory/"Constructors">.  These parameters are exclusive (which is slightly different
+from Apache); you can either allow or deny, but not both at the same time.
+B<Be warned> that the access rights are also not inherited from directory
+configurations encapsulating this one.
 
 The parameters to C<allow> or C<deny> are an ARRAY with any combination of
 
@@ -208,8 +211,8 @@ as produced by the "ls -l" command.
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.21,
-built on October 15, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.22,
+built on October 28, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

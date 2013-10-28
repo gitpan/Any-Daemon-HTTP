@@ -164,13 +164,6 @@ Same as L<addHandler()|Any::Daemon::HTTP::VirtualHost/"Handler">.
 
 =over 4
 
-=item $obj-E<gt>B<allow>(SESSION, REQUEST, URI)
-
-BE WARNED that the URI is the rewrite of the REQUEST uri, and therefore
-you should use that URI.  The SESSION represents a user.
-
-See L</Allow access>.
-
 =item $obj-E<gt>B<mustRedirect>(URI)
 
 [0.21] Returns an HTTP::Response object if the URI needs to be
@@ -286,10 +279,32 @@ For each request, the L<rewrite()|Any::Daemon::HTTP::VirtualHost/"Basic daemon a
 rewrite of the URI is required.  The method must return the original URI
 object (the only parameter) or a new URI object.
 
+=head2 Using Template::Toolkit
+
+Connecting this server with TT is quite simple:
+
+  # Use TT only for pages under /status
+  $vhost->addHandler('/status' => 'ttStatus');
+
+  sub ttStatus($$$$)
+  {   my ($self, $session, $request, $uri, $tree) = @_;;
+      my $template = Template->new(...);
+
+      my $output;
+      my $values = {};  # collect the values
+      $template->process($fn, $values, \$output)
+          or die $template->error, "\n";
+
+      HTTP::Response->new(HTTP_OK, undef
+        , ['Content-Type' => 'text/html']
+        , "$output"
+      );
+  }
+
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.21,
-built on October 15, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.22,
+built on October 28, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 
