@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::VirtualHost;
 use vars '$VERSION';
-$VERSION = '0.22';
+$VERSION = '0.23';
 
 use Log::Report    'any-daemon-http';
 
@@ -17,7 +17,7 @@ use Any::Daemon::HTTP::UserDirs;
 use HTTP::Status qw/:constants/;
 use List::Util   qw/first/;
 use File::Spec   ();
-use POSIX        qw(strftime);
+use POSIX::1003  qw(strftime);
 use Scalar::Util qw(blessed);
 use Digest::MD5  qw(md5_base64);
 

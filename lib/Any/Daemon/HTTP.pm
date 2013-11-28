@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP;
 use vars '$VERSION';
-$VERSION = '0.22';
+$VERSION = '0.23';
 
 use base 'Any::Daemon';
 

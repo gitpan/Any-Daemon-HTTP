@@ -7,15 +7,14 @@ use strict;
 
 package Any::Daemon::HTTP::Directory;
 use vars '$VERSION';
-$VERSION = '0.22';
+$VERSION = '0.23';
 
 use Log::Report  'any-daemon-http';
 
 use Net::CIDR      qw/cidrlookup/;
 use File::Spec     ();
 use File::Basename qw/dirname/;
-use Fcntl          qw/:mode/;
-use POSIX          qw/strftime/;
+use POSIX::1003    qw/strftime :fd :fs/;
 use HTTP::Status   qw/:constants/;
 use HTTP::Response ();
 use Encode         qw/encode/;
