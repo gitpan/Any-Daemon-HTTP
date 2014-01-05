@@ -7,8 +7,12 @@ lib/Any/Daemon/HTTP.pm
 lib/Any/Daemon/HTTP.pod
 lib/Any/Daemon/HTTP/Directory.pm
 lib/Any/Daemon/HTTP/Directory.pod
+lib/Any/Daemon/HTTP/Proxy.pm
+lib/Any/Daemon/HTTP/Proxy.pod
 lib/Any/Daemon/HTTP/Session.pm
 lib/Any/Daemon/HTTP/Session.pod
+lib/Any/Daemon/HTTP/Source.pm
+lib/Any/Daemon/HTTP/Source.pod
 lib/Any/Daemon/HTTP/UserDirs.pm
 lib/Any/Daemon/HTTP/UserDirs.pod
 lib/Any/Daemon/HTTP/VirtualHost.pm

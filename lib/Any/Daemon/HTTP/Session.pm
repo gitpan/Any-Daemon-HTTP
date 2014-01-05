@@ -1,4 +1,4 @@
-# Copyrights 2013 by [Mark Overmeer].
+# Copyrights 2013-2014 by [Mark Overmeer].
 #  For other contributors see ChangeLog.
 # See the manual pages for details on the licensing terms.
 # Pod stripped from pm file by OODoc 2.01.
@@ -7,12 +7,12 @@ use warnings;
 
 package Any::Daemon::HTTP::Session;
 use vars '$VERSION';
-$VERSION = '0.23';
+$VERSION = '0.24';
 
 
 use Log::Report    'any-daemon-http';
 
-use Socket         qw(inet_aton AF_INET);
+use Socket         qw(inet_aton AF_INET AF_INET6 PF_INET PF_INET6);
 
 
 sub new(%)  {my $class = shift; (bless {}, $class)->init({@_})}
@@ -23,7 +23,10 @@ sub init($)
 
     my $peer   = $store->{peer}    ||= {};
     my $ip     = $peer->{ip}       ||= $client->peerhost;
-    $peer->{host} = gethostbyaddr inet_aton($ip), AF_INET;
+    if($client->sockdomain==PF_INET)
+    {   $peer->{host} = gethostbyaddr inet_aton($ip), AF_INET }
+    elsif($client->sockdomain==PF_INET6)
+    {   $peer->{host} = gethostbyaddr $ip, AF_INET6 }
 
     $self;
 }

@@ -1,4 +1,4 @@
-# Copyrights 2013 by [Mark Overmeer].
+# Copyrights 2013-2014 by [Mark Overmeer].
 #  For other contributors see ChangeLog.
 # See the manual pages for details on the licensing terms.
 # Pod stripped from pm file by OODoc 2.01.
@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::UserDirs;
 use vars '$VERSION';
-$VERSION = '0.23';
+$VERSION = '0.24';
 
 use parent 'Any::Daemon::HTTP::Directory';
 
@@ -32,7 +32,6 @@ sub userdirRewrite($$$)
 {   my ($self, $udsub, $allow, $deny) = @_;
     my %homes;  # cache
     sub { my $path = shift;
-panic;
           my ($user, $pathinfo) = $path =~ m!^/\~([^/]*)(.*)!;
           return if keys %$allow && !$allow->{$user};
           return if keys %$deny  &&  $deny->{$user};

@@ -48,12 +48,12 @@ to cache information as well.
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.23,
-built on November 28, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.24,
+built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 
-Copyrights 2013 by [Mark Overmeer]. For other contributors see ChangeLog.
+Copyrights 2013-2014 by [Mark Overmeer]. For other contributors see ChangeLog.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

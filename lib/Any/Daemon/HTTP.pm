@@ -1,4 +1,4 @@
-# Copyrights 2013 by [Mark Overmeer].
+# Copyrights 2013-2014 by [Mark Overmeer].
 #  For other contributors see ChangeLog.
 # See the manual pages for details on the licensing terms.
 # Pod stripped from pm file by OODoc 2.01.
@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP;
 use vars '$VERSION';
-$VERSION = '0.23';
+$VERSION = '0.24';
 
 use base 'Any::Daemon';
 
@@ -15,13 +15,24 @@ use Log::Report    'any-daemon-http';
 
 use Any::Daemon::HTTP::VirtualHost ();
 use Any::Daemon::HTTP::Session     ();
+use Any::Daemon::HTTP::Proxy       ();
 
-use HTTP::Daemon   ();
-use HTTP::Status   qw/:constants :is/;
-use IO::Socket     qw/SOCK_STREAM SOMAXCONN/;
-use File::Basename qw/basename/;
-use File::Spec     ();
-use Scalar::Util   qw/blessed/;
+use HTTP::Daemon     ();
+use HTTP::Status     qw/:constants :is/;
+use IO::Socket       qw/SOCK_STREAM SOMAXCONN SOL_SOCKET SO_LINGER/;
+use IO::Socket::IP   ();
+use IO::Select       ();
+use File::Basename   qw/basename/;
+use File::Spec       ();
+use Scalar::Util     qw/blessed/;
+
+use constant
+  { PROTO_HTTP  => 80
+  , PROTO_HTTPS => 443
+  };
+
+# To support IPv6, replace ::INET by ::IP
+@HTTP::Daemon::ClientConn::ISA = qw(IO::Socket::IP);
 
 
 sub _to_list($) { ref $_[0] eq 'ARRAY' ? @{$_[0]} : defined $_[0] ? $_[0] : () }
@@ -29,48 +40,33 @@ sub init($)
 {   my ($self, $args) = @_;
     $self->SUPER::init($args);
 
-    my $host = $args->{host};
-    my ($use_ssl, $socket);
-    if($socket = $args->{socket})
-    {   $use_ssl = $socket->isa('IO::Socket::SSL');
-        $host  ||= $socket->sockhost;
-    }
-    else
-    {   $use_ssl = $args->{use_ssl};
-        my $sock_class = $use_ssl ? 'IO::Socket::SSL' : 'IO::Socket::INET';
-        eval "require $sock_class" or panic $@;
-
-        $host or error __x"host or socket required for {pkg}::new()"
-           , pkg => ref $self;
-
-        $socket  = $sock_class->new
-          ( LocalHost => $host
-          , Listen    => SOMAXCONN
-          , Reuse     => 1
-          , Type      => SOCK_STREAM
-          , Proto     => 'tcp'
-          ) or fault "cannot create socket at $host";
+    my (@sockets, @hosts);
+    foreach (@{$args}{qw/listen socket host/} )
+    {   foreach my $conn (ref $_ eq 'ARRAY' ? @$_ : $_)
+        {   my ($socket, @host) = $self->_create_socket($_);
+            push @sockets, $socket if $socket;
+            push @hosts, @host;
+        }
     }
 
-    my $conn_class = 'HTTP::Daemon::ClientConn';
-    if($use_ssl)
-    {   $conn_class .= '::SSL';
-        eval "require $conn_class" or panic $@;
-    }
-    $self->{ADH_conn_class} = $conn_class;
+    @sockets or error __x"host or socket required for {pkg}::new()"
+      , pkg => ref $self;
+
+    $self->{ADH_sockets} = \@sockets;
+    $self->{ADH_hosts}   = \@hosts;
 
     $self->{ADH_session_class}
       = $args->{session_class} || 'Any::Daemon::HTTP::Session';
     $self->{ADH_vhost_class}
       = $args->{vhost_class}   || 'Any::Daemon::HTTP::VirtualHost';
-
-    $self->{ADH_ssl}     = $use_ssl;
-    $self->{ADH_socket}  = $socket;
-    $self->{ADH_host}    = $host;
+    $self->{ADH_proxy_class}
+      = $args->{proxy_class}   || 'Any::Daemon::HTTP::Proxy';
 
     $self->{ADH_vhosts}  = {};
-    $self->addVirtualHost($_)
-        for _to_list $args->{vhosts};
+    $self->addVirtualHost($_) for _to_list $args->{vhosts}  || $args->{vhost};
+
+    $self->{ADH_proxies} = [];
+    $self->addProxy($_)       for _to_list $args->{proxies} || $args->{proxy};
 
     !$args->{docroot}
         or error __x"docroot parameter has been removed in v0.11";
@@ -80,10 +76,12 @@ sub init($)
     $self->{ADH_error}   = $args->{on_error}  || sub { $_[1] };
 
     # "handlers" is probably a common typo
-    my $handler = $args->{handler} || $args->{handlers};
+    my $handler = $args->{handlers} || $args->{handler};
+
+    my $host      = shift @hosts;
     $self->addVirtualHost
       ( name      => $host
-      , aliases   => ['default']
+      , aliases   => [@hosts, 'default']
       , documents => $args->{documents}
       , handler   => $handler
       ) if $args->{documents} || $handler;
@@ -91,27 +89,55 @@ sub init($)
     $self;
 }
 
+sub _create_socket($)
+{   my ($self, $listen) = @_;
+    defined $listen or return;
+
+    return ($listen, $listen->sockhost.':'.$listen->sockport)
+        if blessed $listen && $listen->isa('IO::Socket');
+
+    my $port = $listen =~ s/\:([0-9]+)$// ? $1 : PROTO_HTTP;
+    my $host = $listen;
+    
+    my $sock_class;
+    if($port==PROTO_HTTPS)
+    {   $sock_class = 'IO::Socket::SSL';
+        eval "require IO::Socket::SSL; require HTTP::Daemon::ClientConn::SSL;"
+            or panic $@;
+    }
+    else
+    {   $sock_class = 'IO::Socket::IP';
+    }
+
+    my $socket = $sock_class->new
+      ( LocalHost => $host
+      , LocalPort => $port
+      , Listen    => SOMAXCONN
+      , Reuse     => 1
+      , Type      => SOCK_STREAM
+      , Proto     => 'tcp'
+      ) or fault __x"cannot create socket at {address}"
+             , address => "$host:$port";
+
+    ($socket, "$listen:$port", $socket->sockhost.':'.$socket->sockport);
+}
+
 #----------------
 
-sub useSSL() {shift->{ADH_ssl}}
-sub host()   {shift->{ADH_host}}
-sub socket() {shift->{ADH_socket}}
+sub sockets() {@{shift->{ADH_sockets}}}
+sub hosts()   {@{shift->{ADH_hosts}}}
 
 #-------------
 
 sub addVirtualHost(@)
 {   my $self   = shift;
-    my $config = @_==1 ? shift : {@_};
+    my $config = @_ > 1 ? +{@_} : !defined $_[0] ? return : shift;
     my $vhost;
     if(UNIVERSAL::isa($config, 'Any::Daemon::HTTP::VirtualHost'))
-    {   $vhost = $config;
-    }
+         { $vhost = $config }
     elsif(UNIVERSAL::isa($config, 'HASH'))
-    {   $vhost = $self->{ADH_vhost_class}->new($config);
-    }
-    else
-    {   error __x"virtual configuration not a valid object not HASH";
-    }
+         { $vhost = $self->{ADH_vhost_class}->new($config) }
+    else { error __x"virtual host configuration not a valid object nor HASH" }
 
     info __x"adding virtual host {name}", name => $vhost->name;
 
@@ -119,6 +145,26 @@ sub addVirtualHost(@)
         for $vhost->name, $vhost->aliases;
 
     $vhost;
+}
+
+
+sub addProxy(@)
+{   my $self   = shift;
+    my $config = @_ > 1 ? +{@_} : !defined $_[0] ? return : shift;
+    my $proxy;
+    if(UNIVERSAL::isa($config, 'Any::Daemon::HTTP::Proxy'))
+         { $proxy = $config }
+    elsif(UNIVERSAL::isa($config, 'HASH'))
+         { $proxy = $self->{ADH_proxy_class}->new($config) }
+    else { error __x"proxy configuration not a valid object nor HASH" }
+
+    $proxy->forwardMap
+        or error __x"proxy {name} has no map, so needs inside vhost"
+             , name => $proxy->name;
+
+    info __x"adding proxy {name}", name => $proxy->name;
+
+    push @{$self->{ADH_proxies}}, $proxy;
 }
 
 
@@ -136,13 +182,35 @@ sub removeVirtualHost($)
 
 sub virtualHost($) { $_[0]->{ADH_vhosts}{$_[1]} }
 
+
+sub proxies() { @{shift->{ADH_proxies}} }
+
+
+sub findProxy($$$)
+{   my ($self, $session, $req, $host) = @_;
+    my $uri = $req->uri->abs("http://$host");
+    foreach my $proxy ($self->proxies)
+    {   my $mapped = $proxy->forwardRewrite($session, $req, $uri) or next;
+        return ($proxy, $mapped);
+    }
+
+    ();
+}
+
 #-------------------
 
 sub _connection($$)
 {   my ($self, $client, $args) = @_;
+    my $nr_req  = 0;
+    my $max_req = $args->{max_req_per_conn} || 100;
+    my $start   = my $deadline = time + ($args->{max_time_per_conn} || 120);
+    my $bonus   = $args->{req_time_bonus} // 2;
+
+    my $conn_class = $client->isa('IO::Socket::SSL')
+      ? 'HTTP::Daemon::ClientConn::SSL' : 'HTTP::Daemon::ClientConn';
 
     # Ugly hack, steal HTTP::Daemon's http/1.1 implementation
-    bless $client, $self->{ADH_conn_class};
+    bless $client, $conn_class;
     ${*$client}{httpd_daemon} = $self;
 
     my $session = $self->{ADH_session_class}->new(client => $client);
@@ -153,21 +221,33 @@ sub _connection($$)
     # Change title in ps-table
     my $title = $0;
     $title    =~ s/ .*//;
-    $title   .= " http from $host";
-    $title   .= " ip $ip" if $ip ne $host;
+    $title   .= ' http from '. ($host||$ip);
     $0        = $title;
 
     $args->{new_connection}->($self, $session);
 
+    $SIG{ALRM} = sub {
+        notice __x"connection from {host} lasted too long, killed after {time%d} seconds"
+          , host => $host, time => $deadline - $start;
+        exit 0;
+    };
+
+    alarm $deadline - time;
     while(my $req  = $client->get_request)
     {   my $vhostn = $req->header('Host') || 'default';
-        my $vhost  = $vhostn
-            ? $self->virtualHost($vhostn) : $self->virtualHost('default');
-
         my $resp;
-        if($vhost)
-        {   $self->{ADH_current_vhost} = $vhost;
+
+        if(my $vhost  = $self->virtualHost($vhostn))
+        {   $self->{ADH_host_base}
+              = (ref($client) =~ /SSL/ ? 'https' : 'http').'://'.$vhost->name;
             $resp = $vhost->handleRequest($self, $session, $req);
+        }
+        elsif(my ($proxy, $where) = $self->findProxy($session, $req, $vhostn))
+        {   $resp = $proxy->forwardRequest($session, $req, $where);
+        }
+        elsif(my $default = $self->virtualHost('default'))
+        {   $resp = HTTP::Response->new(HTTP_TEMPORARY_REDIRECT);
+            $resp->header(Location => 'http://'.$default->name);
         }
         else
         {   $resp = HTTP::Response->new(HTTP_NOT_ACCEPTABLE,
@@ -187,9 +267,19 @@ sub _connection($$)
         {   $resp = $self->{ADH_error}->($self, $resp, $session, $req);
             $resp->content or $resp->content($resp->status_line);
         }
+        $deadline += $bonus;
+        alarm $deadline - time;
 
+        my $close = $nr_req++ >= $max_req;
+
+        $resp->header(Connection => ($close ? 'close' : 'open'));
         $client->send_response($resp);
+
+        last if $close;
     }
+
+    alarm 0;
+    $nr_req;
 }
 
 sub run(%)
@@ -198,11 +288,10 @@ sub run(%)
     $args{new_connection} ||= sub {};
 
     my $vhosts = $self->{ADH_vhosts};
-    keys %$vhosts
-        or $self->addVirtualHost
-          ( name      => $self->host
-          , aliases   => 'default'
-          );
+    unless(keys %$vhosts)
+    {   my ($host, @aliases) = $self->hosts;
+        $self->addVirtualHost(name => $host, aliases => ['default', @aliases]);
+    }
 
     # option handle_request is deprecated in 0.11
     if(my $handler = delete $args{handle_request})
@@ -210,31 +299,51 @@ sub run(%)
         $first->addHandler('/' => $handler);
     }
 
-    my $title        = $0;
-    $title           =~ s/ .*//;
-    my $conn_count   = 0;
-    $args{child_task} ||=  sub {
-        $0 = "$title unused";
-       
-        while(my $client = $self->socket->accept)
-        {   $conn_count++;
-            $self->_connection($client, \%args);
-            $client->close;
-            $0 = "$title idle after $conn_count";
+    my $title      = $0;
+    $title         =~ s/ .*//;
+    my ($req_count, $conn_count) = (0, 0);
+    my $max_conn   = $args{max_conn_per_child} || 10_000;
+    $max_conn      = int(0.9 * $max_conn + rand(0.2 * $max_conn));
+    my $max_req    = $args{max_req_per_child}  || 100_000;
+    my $linger     = $args{linger};
+
+    $0 = "$title, manager";  # $0 visible with 'ps' command
+    $args{child_task} ||= sub {
+        $0 = "$title, not used yet";
+        # even with one port, we still select...
+        my $select = IO::Select->new($self->sockets);
+
+      CONNECTION:
+        while(my @ready = $select->can_read)
+        {
+            foreach my $socket (@ready)
+            {   my $client = $socket->accept or next;
+                $client->sockopt(SO_LINGER, (pack "ii", 1, $linger))
+                    if defined $linger;
+
+                $0 = "$title, handling "
+                   . $client->peerhost.":".$client->peerport . " at "
+                   . $client->sockhost.':'.$client->sockport;
+
+                $req_count += $self->_connection($client, \%args);
+                $client->close;
+
+                last CONNECTION
+                    if $conn_count++ >= $max_conn
+                    || $req_count    >= $max_req;
+            }
+            $0 = "$title, idle after $conn_count";
         }
-        exit 0;
+        0;
     };
 
     $self->SUPER::run(%args);
 }
 
-# HTTP::Daemon methods used by ::ClientConn.  The names are not compatible
-# with MarkOv convention, so hidden for the users of this module
-sub url()
-{   my $self  = shift;
-    my $vhost = $self->{ADH_current_vhost} or return undef;
-    ($self->useSSL ? 'https' : 'http').'://'.$vhost->name;
-}
+# HTTP::Daemon methods used by ::ClientConn.  We steal that parent role,
+# but need to mimic the object a little.  The names are not compatible
+# with MarkOv's convention, so hidden for the users of this module
+sub url() { shift->{ADH_host_base} }
 sub product_tokens() {shift->{ADH_server}}
 
 1;

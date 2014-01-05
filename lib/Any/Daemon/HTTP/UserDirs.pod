@@ -8,6 +8,7 @@ Any::Daemon::HTTP::UserDirs - describe user directories
 
  Any::Daemon::HTTP::UserDirs
    is a Any::Daemon::HTTP::Directory
+   is a Any::Daemon::HTTP::Source
 
 =head1 SYNOPSIS
 
@@ -41,14 +42,16 @@ See L<documentation in the base class|Any::Daemon::HTTP::Directory/"Constructors
 The user-dir rewrite routine has by default Apache-like behavior.
 
  -Option        --Defined in                  --Default
-  allow           Any::Daemon::HTTP::Directory  <undef>
+  allow           Any::Daemon::HTTP::Source     <undef>
   allow_users                                   undef
-  deny            Any::Daemon::HTTP::Directory  <undef>
+  charset         Any::Daemon::HTTP::Directory  utf-8
+  deny            Any::Daemon::HTTP::Source     <undef>
   deny_users                                    []
   directory_list  Any::Daemon::HTTP::Directory  <false>
   index_file      Any::Daemon::HTTP::Directory  ['index.html', 'index.htm']
   location        Any::Daemon::HTTP::Directory  CODE
-  path            Any::Daemon::HTTP::Directory  <ignored>
+  name            Any::Daemon::HTTP::Source     path
+  path            Any::Daemon::HTTP::Source     <ignored>
   user_subdirs                                  'public_html'
 
 =over 2
@@ -62,6 +65,8 @@ C<deny_users>.  By default, all user homes are permitted, even those
 of system usernames like C<ftp> and C<cups>.
 Only used with the default user-dir rewrite rule.
 
+=item charset => STRING
+
 =item deny => CIDR|HOSTNAME|DOMAIN|CODE|ARRAY
 
 =item deny_users => ARRAY
@@ -73,6 +78,8 @@ Only used with the default user-dir rewrite rule.
 =item index_file => STRING|ARRAY
 
 =item location => DIRECTORY|CODE
+
+=item name => STRING
 
 =item path => PATH
 
@@ -90,13 +97,21 @@ See L<documentation in the base class|Any::Daemon::HTTP::Directory/"Attributes">
  
 =over 4
 
+=item $obj-E<gt>B<charset>()
+
+See L<Any::Daemon::HTTP::Directory/"Attributes">
+
 =item $obj-E<gt>B<location>()
 
 See L<Any::Daemon::HTTP::Directory/"Attributes">
 
+=item $obj-E<gt>B<name>()
+
+See L<Any::Daemon::HTTP::Source/"Attributes">
+
 =item $obj-E<gt>B<path>()
 
-See L<Any::Daemon::HTTP::Directory/"Attributes">
+See L<Any::Daemon::HTTP::Source/"Attributes">
 
 =back
 
@@ -108,19 +123,27 @@ See L<documentation in the base class|Any::Daemon::HTTP::Directory/"Permissions"
 
 =item $obj-E<gt>B<allow>(SESSION, REQUEST, URI)
 
-See L<Any::Daemon::HTTP::Directory/"Permissions">
+See L<Any::Daemon::HTTP::Source/"Permissions">
+
+=item $obj-E<gt>B<collect>(VHOST, SESSION, REQUEST, URI)
+
+See L<Any::Daemon::HTTP::Source/"Permissions">
+
+=back
+
+=head2 Actions
+
+See L<documentation in the base class|Any::Daemon::HTTP::Directory/"Actions">.
+ 
+=over 4
 
 =item $obj-E<gt>B<filename>(PATH)
 
-See L<Any::Daemon::HTTP::Directory/"Permissions">
-
-=item $obj-E<gt>B<fromDisk>(SESSION, REQUEST, URI)
-
-See L<Any::Daemon::HTTP::Directory/"Permissions">
+See L<Any::Daemon::HTTP::Directory/"Actions">
 
 =item $obj-E<gt>B<list>(DIRECTORY, OPTIONS)
 
-See L<Any::Daemon::HTTP::Directory/"Permissions">
+See L<Any::Daemon::HTTP::Directory/"Actions">
 
 =back
 
@@ -130,12 +153,12 @@ See L<documentation in the base class|Any::Daemon::HTTP::Directory/"DETAILS">.
  
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.23,
-built on November 28, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.24,
+built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 
-Copyrights 2013 by [Mark Overmeer]. For other contributors see ChangeLog.
+Copyrights 2013-2014 by [Mark Overmeer]. For other contributors see ChangeLog.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

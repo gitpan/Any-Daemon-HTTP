@@ -6,6 +6,9 @@ Any::Daemon::HTTP::Directory - describe a server directory
 
 =head1 INHERITANCE
 
+ Any::Daemon::HTTP::Directory
+   is a Any::Daemon::HTTP::Source
+
  Any::Daemon::HTTP::Directory is extended by
    Any::Daemon::HTTP::UserDirs
 
@@ -26,41 +29,44 @@ Any::Daemon::HTTP::Directory - describe a server directory
 
 =head1 DESCRIPTION
 
-Each L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> will define where the files are
-located.  Parts of the URI path can map on different directories,
-with different permissions.
+Each L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> will define where the files
+are located.  Parts of the URI path can map on different (virtual)
+directories, with different access rights.
 
-User directories, like used in the URI C<<http://xx/~user/yy>>
-are implemented in L<Any::Daemon::HTTP::UserDirs|Any::Daemon::HTTP::UserDirs>.
-
+See L<documentation in the base class|Any::Daemon::HTTP::Source/"DESCRIPTION">.
+ 
 =head1 METHODS
 
+See L<documentation in the base class|Any::Daemon::HTTP::Source/"METHODS">.
+ 
 =head2 Constructors
 
+See L<documentation in the base class|Any::Daemon::HTTP::Source/"Constructors">.
+ 
 =over 4
 
 =item Any::Daemon::HTTP::Directory-E<gt>B<new>(OPTIONS|HASH-of-OPTIONS)
 
- -Option        --Default
-  allow           <undef>
-  deny            <undef>
-  directory_list  <false>
-  index_file      ['index.html', 'index.htm']
-  location        <required>
-  path            '/'
+ -Option        --Defined in               --Default
+  allow           Any::Daemon::HTTP::Source  <undef>
+  charset                                    utf-8
+  deny            Any::Daemon::HTTP::Source  <undef>
+  directory_list                             <false>
+  index_file                                 ['index.html', 'index.htm']
+  location                                   <required>
+  name            Any::Daemon::HTTP::Source  path
+  path            Any::Daemon::HTTP::Source  '/'
 
 =over 2
 
 =item allow => CIDR|HOSTNAME|DOMAIN|CODE|ARRAY
 
-Allow all requests which pass any of these parameters, and none
-of the deny parameters.  See L</Allow access>.  B<Be warned> that
-the access rights are not inherited from directory configurations
-encapsulating this one.
+=item charset => STRING
+
+The character-set which is used all text-files on the system, used in
+response headers of text-files.
 
 =item deny => CIDR|HOSTNAME|DOMAIN|CODE|ARRAY
-
-See C<allow> and L</Allow access>
 
 =item directory_list => BOOLEAN
 
@@ -78,10 +84,9 @@ The DIRECTORY to be prefixed before the path of the URI, or a CODE
 reference which will rewrite the path (passed as only parameter) into the
 absolute file or directory name.
 
-=item path => PATH
+=item name => STRING
 
-If the directory PATH (relative to the document root C<location>) is not
-trailed by a '/', it will be made so.
+=item path => PATH
 
 =back
 
@@ -89,33 +94,49 @@ trailed by a '/', it will be made so.
 
 =head2 Attributes
 
+See L<documentation in the base class|Any::Daemon::HTTP::Source/"Attributes">.
+ 
 =over 4
+
+=item $obj-E<gt>B<charset>()
 
 =item $obj-E<gt>B<location>()
 
+=item $obj-E<gt>B<name>()
+
+See L<Any::Daemon::HTTP::Source/"Attributes">
+
 =item $obj-E<gt>B<path>()
+
+See L<Any::Daemon::HTTP::Source/"Attributes">
 
 =back
 
 =head2 Permissions
 
+See L<documentation in the base class|Any::Daemon::HTTP::Source/"Permissions">.
+ 
 =over 4
 
 =item $obj-E<gt>B<allow>(SESSION, REQUEST, URI)
 
-BE WARNED that the URI is the rewrite of the REQUEST uri, and therefore
-you should use that URI.  The SESSION represents a user.
+See L<Any::Daemon::HTTP::Source/"Permissions">
 
-See L</Allow access>.
+=item $obj-E<gt>B<collect>(VHOST, SESSION, REQUEST, URI)
+
+See L<Any::Daemon::HTTP::Source/"Permissions">
+
+=back
+
+=head2 Actions
+
+See L<documentation in the base class|Any::Daemon::HTTP::Source/"Actions">.
+ 
+=over 4
 
 =item $obj-E<gt>B<filename>(PATH)
 
 Convert a URI PATH into a directory path.  Return C<undef> if not possible.
-
-=item $obj-E<gt>B<fromDisk>(SESSION, REQUEST, URI)
-
-Try to produce a response (HTTP::Response) for something inside this
-directory structure.  C<undef> is returned if nothing useful is found.
 
 =item $obj-E<gt>B<list>(DIRECTORY, OPTIONS)
 
@@ -150,38 +171,15 @@ default regexp (on UNIX) is C<< qr/^[^.]/ >>
 
 =head1 DETAILS
 
-=head2 Directory limits
+See L<documentation in the base class|Any::Daemon::HTTP::Source/"DETAILS">.
+ 
+=head2 Resource restrictions
 
-=head3 Allow access
-
-The L<allow()|Any::Daemon::HTTP::Directory/"Permissions"> method handles access rights.  When a trueth value is
-produced, then access is permitted.
-
-The base class implements access rules via the C<allow> or C<deny> option
-of L<new()|Any::Daemon::HTTP::Directory/"Constructors">.  These parameters are exclusive (which is slightly different
-from Apache); you can either allow or deny, but not both at the same time.
-B<Be warned> that the access rights are also not inherited from directory
-configurations encapsulating this one.
-
-The parameters to C<allow> or C<deny> are an ARRAY with any combination of
-
-=over 4
-
-=item IPv4 and IPv6 address ranges in CIDR notation
-
-=item hostname
-
-=item domain name (leading dot)
-
-=item your own CODE reference, which will be called with the IP address,
-
-  the hostname, the session, and the rewritten URI.
-
-=back
-
+See L<documentation in the base class|Any::Daemon::HTTP::Source/"Resource restrictions">.
+ 
 =head2 Return of list()
 
-The L<list()|Any::Daemon::HTTP::Directory/"Permissions"> method returns a HASH of HASHes, where the
+The L<list()|Any::Daemon::HTTP::Directory/"Actions"> method returns a HASH of HASHes, where the
 primary keys are the directory entries, each refering to a HASH
 with details.  It is designed to ease the connection to template
 systems.
@@ -211,12 +209,12 @@ as produced by the "ls -l" command.
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.23,
-built on November 28, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.24,
+built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 
-Copyrights 2013 by [Mark Overmeer]. For other contributors see ChangeLog.
+Copyrights 2013-2014 by [Mark Overmeer]. For other contributors see ChangeLog.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

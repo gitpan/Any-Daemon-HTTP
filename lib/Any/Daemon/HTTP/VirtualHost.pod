@@ -52,6 +52,7 @@ by using these options.
   documents    <undef>
   handlers     {}
   name         <required>
+  proxies      undef
   redirect     <undef>
   rewrite      <undef>
   user_dirs    undef
@@ -80,6 +81,11 @@ are taken from the directory definition which is selected by the path.
 Read L</DETAILS> for the details.
 
 =item name => HOSTNAME
+
+=item proxies => OBJECT|HASH|ARRAY
+
+Pass one or more L<Any::Daemon::HTTP::Proxy|Any::Daemon::HTTP::Proxy> OBJECTS, or HASHes which
+will be used to initialize them.
 
 =item redirect => CODE|METHOD|HASH
 
@@ -164,6 +170,11 @@ Same as L<addHandler()|Any::Daemon::HTTP::VirtualHost/"Handler">.
 
 =over 4
 
+=item $obj-E<gt>B<addSource>(SOURCE)
+
+The SOURCE objects extend L<Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source>, for instance a
+C<::Directory> or a C<::Proxy>.  You can find them back via L<sourceFor()|Any::Daemon::HTTP::VirtualHost/"Directories">.
+
 =item $obj-E<gt>B<mustRedirect>(URI)
 
 [0.21] Returns an HTTP::Response object if the URI needs to be
@@ -190,14 +201,27 @@ Either pass a L<Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory> OBJEC
 create the object.  When OPTIONS are provided, they are passed to
 L<Any::Daemon::HTTP::Directory::new()|Any::Daemon::HTTP::Directory/"Constructors"> to create the OBJECT.
 
-=item $obj-E<gt>B<directoryOf>(PATH|PATH_SEGMENTS)
-
-Find the best matching L<Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory> object.
-
 =item $obj-E<gt>B<filename>(URI)
 
 Translate the URI into a filename, without checking for existence.  Returns
 C<undef> is not possible.
+
+=item $obj-E<gt>B<sourceFor>(PATH|PATH_SEGMENTS)
+
+Find the best matching L<Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source> object, which
+might be a C<::UserDirs>, a C<::Directory>, or a C<::Proxy>.
+
+=back
+
+=head2 Proxies
+
+=over 4
+
+=item $obj-E<gt>B<addProxy>(OBJECT|HASH|OPTIONS)
+
+Either pass a L<Any::Daemon::HTTP::Proxy|Any::Daemon::HTTP::Proxy> OBJECT or the OPTIONS to
+create the object.  When OPTIONS are provided, they are passed to
+L<Any::Daemon::HTTP::Proxy::new()|Any::Daemon::HTTP::Proxy/"Constructors"> to create the OBJECT.
 
 =back
 
@@ -281,7 +305,8 @@ object (the only parameter) or a new URI object.
 
 =head2 Using Template::Toolkit
 
-Connecting this server with TT is quite simple:
+Connecting this server to the popular Template::Toolkit webpage
+framework is quite simple:
 
   # Use TT only for pages under /status
   $vhost->addHandler('/status' => 'ttStatus');
@@ -298,17 +323,20 @@ Connecting this server with TT is quite simple:
       HTTP::Response->new(HTTP_OK, undef
         , ['Content-Type' => 'text/html']
         , "$output"
-      );
+        );
   }
+
+See Log::Report::Extract::Template if you need translations
+as well.
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.23,
-built on November 28, 2013. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.24,
+built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 
-Copyrights 2013 by [Mark Overmeer]. For other contributors see ChangeLog.
+Copyrights 2013-2014 by [Mark Overmeer]. For other contributors see ChangeLog.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

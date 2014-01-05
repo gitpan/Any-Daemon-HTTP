@@ -1,4 +1,4 @@
-# Copyrights 2013 by [Mark Overmeer].
+# Copyrights 2013-2014 by [Mark Overmeer].
 #  For other contributors see ChangeLog.
 # See the manual pages for details on the licensing terms.
 # Pod stripped from pm file by OODoc 2.01.
@@ -7,11 +7,12 @@ use strict;
 
 package Any::Daemon::HTTP::Directory;
 use vars '$VERSION';
-$VERSION = '0.23';
+$VERSION = '0.24';
+
+use parent 'Any::Daemon::HTTP::Source';
 
 use Log::Report  'any-daemon-http';
 
-use Net::CIDR      qw/cidrlookup/;
 use File::Spec     ();
 use File::Basename qw/dirname/;
 use POSIX::1003    qw/strftime :fd :fs/;
@@ -19,25 +20,17 @@ use HTTP::Status   qw/:constants/;
 use HTTP::Response ();
 use Encode         qw/encode/;
 use MIME::Types    ();
-use List::Util     qw/first/;
 
 my $mimetypes = MIME::Types->new(only_complete => 1);
 
-sub _allow_cleanup($);
-sub _allow_match($$$$);
 sub _filename_trans($$);
 
 
-sub new(@)
-{   my $class = shift;
-    my $args  = @_==1 ? shift : +{@_};
-    (bless {}, $class)->init($args);
-}
-
 sub init($)
 {   my ($self, $args) = @_;
+    $self->SUPER::init($args);
 
-    my $path = $self->{ADHD_path}  = $args->{path} || '/';
+    my $path = $self->path;
     my $loc  = $args->{location}
         or error __x"directory definition requires location";
 
@@ -58,9 +51,8 @@ sub init($)
 
     $self->{ADHD_loc}   = $loc;
     $self->{ADHD_fn}    = $trans;
-    $self->{ADHD_allow} = _allow_cleanup $args->{allow};
-    $self->{ADHD_deny}  = _allow_cleanup $args->{deny};
     $self->{ADHD_dirlist} = $args->{directory_list} || 0;
+    $self->{ADHD_charset} = $args->{charset} || 'utf-8';
 
     my $if = $args->{index_file};
     my @if = ref $if eq 'ARRAY' ? @$if
@@ -72,42 +64,12 @@ sub init($)
 
 #-----------------
 
-sub path()     {shift->{ADHD_path}}
 sub location() {shift->{ADHD_location}}
+sub charset()  {shift->{ADHD_charset}}
 
 #-----------------
 
-sub allow($$$$)
-{   my ($self, $session, $req, $uri) = @_;
-    if(my $allow = $self->{ADHD_allow})
-    {   $self->_allow_match($session, $uri, $allow) or return 0;
-    }
-    if(my $deny = $self->{ADHD_deny})
-    {    $self->_allow_match($session, $uri, $deny) and return 0;
-    }
-    1;
-}
-
-sub _allow_match($$$$)
-{   my ($self, $session, $uri, $rules) = @_;
-    my $peer = $session->get('peer');
-    first { $_->($peer->{ip}, $peer->{host}, $session, $uri) } @$rules;
-}
-
-sub _allow_cleanup($)
-{   my $p = shift or return;
-    my @p;
-    foreach my $r (ref $p eq 'ARRAY' ? @$p : $p)
-    {   push @p
-          , ref $r eq 'CODE'      ? $r
-          : index($r, ':') >= 0   ? sub {cidrlookup $_[0], $r}    # IPv6
-          : $r !~ m/[a-zA-Z]/     ? sub {cidrlookup $_[0], $r}    # IPv4
-          : substr($r,0,1) eq '.' ? sub {$_[1] =~ qr/(^|\.)\Q$r\E$/i} # Domain
-          :                         sub {lc($_[1]) eq lc($r)}     # hostname
-    }
-    @p ? \@p : undef;
-}
-
+#-----------------------
 
 sub filename($) { $_[0]->{ADHD_fn}->($_[1]) }
 
@@ -121,12 +83,8 @@ sub _filename_trans($$)
       };
 }
 
-
-sub fromDisk($$$)
-{   my ($self, $session, $req, $uri) = @_;
-
-    $self->allow($session, $req, $uri)
-        or return HTTP::Response->new(HTTP_FORBIDDEN);
+sub _collect($$$$)
+{   my ($self, $vhost, $session, $req, $uri) = @_;
 
     my $item = $self->filename($uri);
 
@@ -160,13 +118,13 @@ sub _file_response($$)
     -f $fn
         or return HTTP::Response->new(HTTP_NOT_FOUND);
 
-    open my($fh), '<:raw', $fn
+    open my $fh, '<:raw', $fn
         or return HTTP::Response->new(HTTP_FORBIDDEN);
 
     my ($dev, $inode, $mtime) = (stat $fh)[0,1,9];
     my $etag      = "$dev-$inode-$mtime";
 
-    my $has_etag  = $req->header('If-None_Match');
+    my $has_etag  = $req->header('If-None-Match');
     return HTTP::Response->new(HTTP_NOT_MODIFIED, 'match etag')
         if defined $has_etag && $has_etag eq $etag;
 
@@ -179,7 +137,7 @@ sub _file_response($$)
     my $ct;
     if(my $mime = $mimetypes->mimeTypeOf($fn))
     {   $ct  = $mime->type;
-        $ct .= "; charset='utf8'" if $mime->isAscii;
+        $ct .= '; charset='.$self->charset if $mime->isAscii;
     }
     else
     {   $ct  = 'binary/octet-stream';
@@ -190,9 +148,7 @@ sub _file_response($$)
     $head->header(ETag => $etag);
 
     local $/;
-    my $resp = HTTP::Response->new(HTTP_OK, undef, $head, <$fh>);
-
-    $resp;
+    HTTP::Response->new(HTTP_OK, undef, $head, <$fh>);
 }
 
 sub _list_response($$$)
@@ -209,14 +165,15 @@ sub _list_response($$$)
 __UP
 
     foreach my $item (sort keys %$list)
-    {   my $d = $list->{$item};
+    {   my $d       = $list->{$item};
+        my $symdest = $d->{is_symlink} ? "&rarr; $d->{symlink_dest}" : "";
         push @rows, <<__ROW;
 <tr><td>$d->{flags}</td>
     <td>$d->{user}</td>
     <td>$d->{group}</td>
     <td align="right">$d->{size_nice}</td>
     <td>$d->{mtime_nice}</td>
-    <td><a href="$d->{name}">$d->{name}</a></td></tr>
+    <td><a href="$d->{name}">$d->{name}</a>$symdest</td></tr>
 __ROW
     }
 
@@ -234,7 +191,7 @@ __ROW
 __PAGE
 
     HTTP::Response->new(HTTP_OK, undef
-      , ['Content-Type' => 'text/html; charset="utf8"']
+      , ['Content-Type' => 'text/html; charset='.$self->charset]
       , $content
       );
 }
@@ -298,20 +255,20 @@ sub list($@)
         {   $d{name} .= '/';
         }
 
-        if($d{is_file} || $d{is_directory})
-        {   $d{user}  = $users{$d{uid}} ||= getpwuid $d{uid};
-            $d{group} = $users{$d{gid}} ||= getgrgid $d{gid};
-            my $mode = $d{mode};
-            my $b = $filetype{$mode & S_IFMT} || '?';
-            $b   .= $flags[ ($mode & S_IRWXU) >> 6 ];
-            substr($b, -1, -1) = 's' if $mode & S_ISUID;
-            $b   .= $flags[ ($mode & S_IRWXG) >> 3 ];
-            substr($b, -1, -1) = 's' if $mode & S_ISGID;
-            $b   .= $flags[  $mode & S_IRWXO ];
-            substr($b, -1, -1) = 't' if $mode & S_ISVTX;
-            $d{flags}      = $b;
-            $d{mtime_nice} = strftime "%F %T", localtime $d{mtime};
-        }
+        $d{user}  = $users{$d{uid}} ||= getpwuid $d{uid};
+        $d{group} = $users{$d{gid}} ||= getgrgid $d{gid};
+
+        my $mode = $d{mode};
+        my $b = $filetype{$mode & S_IFMT} || '?';
+        $b   .= $flags[ ($mode & S_IRWXU) >> 6 ];
+        substr($b, -1, -1) = 's' if $mode & S_ISUID;
+        $b   .= $flags[ ($mode & S_IRWXG) >> 3 ];
+        substr($b, -1, -1) = 's' if $mode & S_ISGID;
+        $b   .= $flags[  $mode & S_IRWXO ];
+        substr($b, -1, -1) = 't' if $mode & S_ISVTX;
+        $d{flags}      = $b;
+        $d{mtime_nice} = strftime "%F %T", localtime $d{mtime};
+
         $dirlist{$name} = \%d;
     }
     \%dirlist;

@@ -1,4 +1,4 @@
-# Copyrights 2013 by [Mark Overmeer].
+# Copyrights 2013-2014 by [Mark Overmeer].
 #  For other contributors see ChangeLog.
 # See the manual pages for details on the licensing terms.
 # Pod stripped from pm file by OODoc 2.01.
@@ -7,12 +7,13 @@ use strict;
 
 package Any::Daemon::HTTP::VirtualHost;
 use vars '$VERSION';
-$VERSION = '0.23';
+$VERSION = '0.24';
 
 use Log::Report    'any-daemon-http';
 
 use Any::Daemon::HTTP::Directory;
 use Any::Daemon::HTTP::UserDirs;
+use Any::Daemon::HTTP::Proxy;
 
 use HTTP::Status qw/:constants/;
 use List::Util   qw/first/;
@@ -35,17 +36,21 @@ sub init($)
     defined $name
         or error __x"virtual host {pkg} has no name", pkg => ref $self;
 
-    my $aliases = $args->{aliases}            || [];
+    my $aliases = $args->{aliases} || [];
     $self->{ADHV_aliases}  = ref $aliases eq 'ARRAY' ? $aliases : [$aliases];
     $self->{ADHV_handlers} = $args->{handler} || $args->{handlers} || {};
     $self->{ADHV_rewrite}  = $self->_rewrite_call($args->{rewrite});
     $self->{ADHV_redirect} = $self->_redirect_call($args->{redirect});
     $self->{ADHV_udirs}    = $self->_user_dirs($args->{user_dirs});
 
-    $self->{ADHV_dirs}     = {};
+    $self->{ADHV_sources}     = {};
     $self->_auto_docs($args->{documents});
     my $dirs = $args->{directories} || [];
     $self->addDirectory($_) for ref $dirs eq 'ARRAY' ? @$dirs : $dirs;
+
+    $self->{ADHV_proxies}  = {};
+    my $proxies = $args->{proxies}  || [];
+    $self->addProxy($_) for ref $proxies eq 'ARRAY' ? @$proxies : $proxies;
 
     $self;
 }
@@ -133,9 +138,10 @@ sub findHandler(@)
     sub {HTTP::Response->new(HTTP_NOT_FOUND)}
 }
 
-
 #-----------------
 
+
+#-----------------
 
 sub handleRequest($$$;$)
 {   my ($self, $server, $session, $req, $uri) = @_;
@@ -153,18 +159,18 @@ sub handleRequest($$$;$)
         $uri = $new_uri;
     }
 
-    my $path = $uri->path;
+    my $path   = $uri->path;
     info __x"{vhost} request {path}", vhost => $self->name, path => $uri->path;
 
-    my @path = $uri->path_segments;
-    my $tree = $self->directoryOf(@path);
+    my @path   = $uri->path_segments;
+    my $source = $self->sourceFor(@path);
 
     # static content?
-    my $resp = $tree->fromDisk($session, $req, $uri);
+    my $resp   = $source ? $source->collect($self, $session, $req,$uri) : undef;
     return $resp if $resp;
 
     # dynamic content
-    $resp = $self->findHandler(@path)->($self, $session, $req, $uri, $tree);
+    $resp = $self->findHandler(@path)->($self, $session, $req, $uri, $source);
     $resp or return HTTP::Response->new(HTTP_NO_CONTENT);
 
     $resp->code eq HTTP_OK
@@ -256,11 +262,31 @@ sub _redirect_call($)
       , ref => (ref $red || $red), vhost => $self->name;
 }
 
+
+sub addSource($)
+{   my ($self, $source) = @_;
+    $source or return;
+
+    my $sources = $self->{ADHV_sources};
+    my $path    = $source->path;
+
+    if(my $old = exists $sources->{$path})
+    {   error __x"vhost {name} directory `{path}' defined twice, for `{old}' and `{new}' "
+           , name => $self->name, path => $path
+           , old => $old->name, new => $source->name;
+    }
+
+    info __x"add configuration `{name}' to {vhost} for {path}"
+      , name => $source->name, vhost => $self->name, path => $path;
+
+    $sources->{$path} = $source;
+}
+
 #------------------
 
 sub filename($)
 {   my ($self, $uri) = @_;
-    my $dir = $self->directoryOf($uri);
+    my $dir = $self->sourceFor($uri);
     $dir ? $dir->filename($uri->path) : undef;
 }
 
@@ -270,32 +296,41 @@ sub addDirectory(@)
     my $dir  = @_==1 && blessed $_[0] ? shift
        : Any::Daemon::HTTP::Directory->new(@_);
 
-    my $path = $dir->path || '';
-    !exists $self->{ADHV_dirs}{$path}
-        or error __x"vhost {name} directory `{path}' defined twice"
-             , name => $self->name, path => $path;
-
-    info __x"add directory configuration to {vhost} for {path}"
-      , vhost => $self->name, path => $path;
-
-    $self->{ADHV_dirs}{$path} = $dir;
+    $self->addSource($dir);
 }
 
 
-sub directoryOf(@)
+sub sourceFor(@)
 {   my $self  = shift;
     my @path  = @_>1 || index($_[0], '/')==-1 ? @_ : split('/', $_[0]);
 
     return $self->{ADHV_udirs}
         if substr($path[0], 0, 1) eq '~';
 
-    my $dirs = $self->{ADHV_dirs};
+    my $sources = $self->{ADHV_sources};
     while(@path)
-    {   my $dir = $dirs->{join '/', @path};
+    {   my $dir = $sources->{join '/', @path};
         return $dir if $dir;
         pop @path;
     }
-    $dirs->{'/'} ? $dirs->{'/'} : ();
+    $sources->{'/'} ? $sources->{'/'} : ();
+}
+
+#-----------------------------
+
+sub addProxy(@)
+{   my $self  = shift;
+    my $proxy = @_==1 && blessed $_[0] ? shift
+       : Any::Daemon::HTTP::Proxy->new(@_);
+
+    error __x"proxy {name} has a map, so cannot be added to a vhost"
+      , name => $proxy->name
+        if $proxy->forwardMap;
+
+    info __x"add proxy configuration to {vhost} for {path}"
+      , vhost => $self->name, path => $proxy->path;
+
+    $self->addSource($proxy);
 }
 
 #-----------------------------
