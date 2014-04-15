@@ -25,7 +25,7 @@ requires:
   Fcntl: 0
   File::Basename: 0
   File::Spec: 0
-  HTTP::Daemon: 6.01
+  HTTP::Daemon: 6.03
   HTTP::Response: 0
   HTTP::Status: 0
   IO::Select: 0
@@ -39,4 +39,4 @@ requires:
   Scalar::Util: 0
   Socket: 0
   URI: 0
-version: 0.24
+version: 0.25

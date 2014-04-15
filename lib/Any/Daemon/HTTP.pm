@@ -7,11 +7,11 @@ use strict;
 
 package Any::Daemon::HTTP;
 use vars '$VERSION';
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 use base 'Any::Daemon';
 
-use Log::Report    'any-daemon-http';
+use Log::Report      'any-daemon-http';
 
 use Any::Daemon::HTTP::VirtualHost ();
 use Any::Daemon::HTTP::Session     ();
@@ -25,6 +25,7 @@ use IO::Select       ();
 use File::Basename   qw/basename/;
 use File::Spec       ();
 use Scalar::Util     qw/blessed/;
+use Errno            qw/EADDRINUSE/;
 
 use constant
   { PROTO_HTTP  => 80
@@ -109,15 +110,37 @@ sub _create_socket($)
     {   $sock_class = 'IO::Socket::IP';
     }
 
-    my $socket = $sock_class->new
-      ( LocalHost => $host
-      , LocalPort => $port
-      , Listen    => SOMAXCONN
-      , Reuse     => 1
-      , Type      => SOCK_STREAM
-      , Proto     => 'tcp'
-      ) or fault __x"cannot create socket at {address}"
+    # Wait max 60 seconds to get the socket
+    # You should be able to reduce the time to wait by setting linger
+    # on the socket in the process which has opened the socket before.
+    my ($socket, $elapse);
+    foreach my $retry (1..60)
+    {   $elapse = $retry -1;
+
+        $socket = $sock_class->new
+          ( LocalHost => $host
+          , LocalPort => $port
+          , Listen    => SOMAXCONN
+          , Reuse     => 1
+          , Type      => SOCK_STREAM
+          , Proto     => 'tcp'
+          );
+
+        last if $socket || $! != EADDRINUSE;
+
+        notice __x"waiting for socket at {address} to become available"
+          , address => "$host:$port"
+            if $retry==1;
+
+        sleep 1;
+    }
+
+    $socket
+        or fault __x"cannot create socket at {address}"
              , address => "$host:$port";
+
+    notice __x"got socket after {secs} seconds", secs => $elapse
+        if $elapse;
 
     ($socket, "$listen:$port", $socket->sockhost.':'.$socket->sockport);
 }
@@ -201,10 +224,11 @@ sub findProxy($$$)
 
 sub _connection($$)
 {   my ($self, $client, $args) = @_;
-    my $nr_req  = 0;
-    my $max_req = $args->{max_req_per_conn} || 100;
-    my $start   = my $deadline = time + ($args->{max_time_per_conn} || 120);
-    my $bonus   = $args->{req_time_bonus} // 2;
+    my $nr_req   = 0;
+    my $max_req  = $args->{max_req_per_conn} || 100;
+    my $start    = time;
+    my $deadline = $start + ($args->{max_time_per_conn} || 120);
+    my $bonus    = $args->{req_time_bonus} // 2;
 
     my $conn_class = $client->isa('IO::Socket::SSL')
       ? 'HTTP::Daemon::ClientConn::SSL' : 'HTTP::Daemon::ClientConn';
@@ -318,7 +342,7 @@ sub run(%)
         {
             foreach my $socket (@ready)
             {   my $client = $socket->accept or next;
-                $client->sockopt(SO_LINGER, (pack "ii", 1, $linger))
+                $client->sockopt(SO_LINGER, (pack "II", 1, $linger))
                     if defined $linger;
 
                 $0 = "$title, handling "

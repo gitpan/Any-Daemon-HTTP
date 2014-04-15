@@ -33,19 +33,19 @@ Each L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> will defin
 are located.  Parts of the URI path can map on different (virtual)
 directories, with different access rights.
 
-See L<documentation in the base class|Any::Daemon::HTTP::Source/"DESCRIPTION">.
+Extends L<"DESCRIPTION" in Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source/"DESCRIPTION">.
  
 =head1 METHODS
 
-See L<documentation in the base class|Any::Daemon::HTTP::Source/"METHODS">.
+Extends L<"METHODS" in Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source/"METHODS">.
  
 =head2 Constructors
 
-See L<documentation in the base class|Any::Daemon::HTTP::Source/"Constructors">.
+Extends L<"Constructors" in Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source/"Constructors">.
  
 =over 4
 
-=item Any::Daemon::HTTP::Directory-E<gt>B<new>(OPTIONS|HASH-of-OPTIONS)
+=item Any::Daemon::HTTP::Directory-E<gt>B<new>(%options|\%options)
 
  -Option        --Defined in               --Default
   allow           Any::Daemon::HTTP::Source  <undef>
@@ -94,7 +94,7 @@ absolute file or directory name.
 
 =head2 Attributes
 
-See L<documentation in the base class|Any::Daemon::HTTP::Source/"Attributes">.
+Extends L<"Attributes" in Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source/"Attributes">.
  
 =over 4
 
@@ -104,43 +104,43 @@ See L<documentation in the base class|Any::Daemon::HTTP::Source/"Attributes">.
 
 =item $obj-E<gt>B<name>()
 
-See L<Any::Daemon::HTTP::Source/"Attributes">
+Inherited, see L<Any::Daemon::HTTP::Source/"Attributes">
 
 =item $obj-E<gt>B<path>()
 
-See L<Any::Daemon::HTTP::Source/"Attributes">
+Inherited, see L<Any::Daemon::HTTP::Source/"Attributes">
 
 =back
 
 =head2 Permissions
 
-See L<documentation in the base class|Any::Daemon::HTTP::Source/"Permissions">.
+Extends L<"Permissions" in Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source/"Permissions">.
  
 =over 4
 
-=item $obj-E<gt>B<allow>(SESSION, REQUEST, URI)
+=item $obj-E<gt>B<allow>($session, $request, $uri)
 
-See L<Any::Daemon::HTTP::Source/"Permissions">
+Inherited, see L<Any::Daemon::HTTP::Source/"Permissions">
 
-=item $obj-E<gt>B<collect>(VHOST, SESSION, REQUEST, URI)
+=item $obj-E<gt>B<collect>($vhost, $session, $request, $uri)
 
-See L<Any::Daemon::HTTP::Source/"Permissions">
+Inherited, see L<Any::Daemon::HTTP::Source/"Permissions">
 
 =back
 
 =head2 Actions
 
-See L<documentation in the base class|Any::Daemon::HTTP::Source/"Actions">.
+Extends L<"Actions" in Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source/"Actions">.
  
 =over 4
 
-=item $obj-E<gt>B<filename>(PATH)
+=item $obj-E<gt>B<filename>($path)
 
-Convert a URI PATH into a directory path.  Return C<undef> if not possible.
+Convert a URI $path into a directory path.  Return C<undef> if not possible.
 
-=item $obj-E<gt>B<list>(DIRECTORY, OPTIONS)
+=item $obj-E<gt>B<list>($directory, %options)
 
-Returns a HASH with information about the DIRECTORY content.  This may
+Returns a HASH with information about the $directory content.  This may
 be passed into some template or the default template.  See L</Return of
 directoryList> about the returned output.
 
@@ -171,11 +171,11 @@ default regexp (on UNIX) is C<< qr/^[^.]/ >>
 
 =head1 DETAILS
 
-See L<documentation in the base class|Any::Daemon::HTTP::Source/"DETAILS">.
+Extends L<"DETAILS" in Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source/"DETAILS">.
  
 =head2 Resource restrictions
 
-See L<documentation in the base class|Any::Daemon::HTTP::Source/"Resource restrictions">.
+Extends L<"Resource restrictions" in Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source/"Resource restrictions">.
  
 =head2 Return of list()
 
@@ -209,8 +209,8 @@ as produced by the "ls -l" command.
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.24,
-built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.25,
+built on April 15, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::Source;
 use vars '$VERSION';
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 use Log::Report  'any-daemon-http';
 

@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::Proxy;
 use vars '$VERSION';
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 use parent 'Any::Daemon::HTTP::Source';
 
@@ -156,6 +156,6 @@ sub forwardRequest($$$)
     $self->_collect(undef, $session, $req, $uri);
 }
 
-1;
+#----------------
 
-__END__
+1;

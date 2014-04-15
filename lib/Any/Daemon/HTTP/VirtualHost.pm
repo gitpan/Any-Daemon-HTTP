@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::VirtualHost;
 use vars '$VERSION';
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 use Log::Report    'any-daemon-http';
 
@@ -135,7 +135,7 @@ sub findHandler(@)
         pop @path;
     }
     
-    sub {HTTP::Response->new(HTTP_NOT_FOUND)}
+    sub { HTTP::Response->new(HTTP_NOT_FOUND) };
 }
 
 #-----------------
@@ -313,6 +313,8 @@ sub sourceFor(@)
         return $dir if $dir;
         pop @path;
     }
+
+    # return empty list, not undef, when not found
     $sources->{'/'} ? $sources->{'/'} : ();
 }
 

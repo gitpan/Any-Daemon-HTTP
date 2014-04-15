@@ -7,7 +7,7 @@ use strict;
 
 package Any::Daemon::HTTP::Directory;
 use vars '$VERSION';
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 use parent 'Any::Daemon::HTTP::Source';
 

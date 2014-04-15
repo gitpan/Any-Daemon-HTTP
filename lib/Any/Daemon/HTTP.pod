@@ -15,6 +15,8 @@ Any::Daemon::HTTP - preforking Apache/Plack-like webserver
   # Simpelest
   #
 
+  use Log::Report;
+  use Any::Daemon::HTTP;
   my $http = Any::Daemon::HTTP->new
     ( handler   => \&handler
     , listen    => 'server.example.com:80'
@@ -30,6 +32,8 @@ Any::Daemon::HTTP - preforking Apache/Plack-like webserver
   # Clean style
   #
 
+  use Log::Report;
+  use Any::Daemon::HTTP;
   my $http = Any::Daemon::HTTP->new
     ( listen    => 'server.example.com:80'
     );
@@ -68,19 +72,19 @@ See L</DETAILS> for a list of features and limitations.
 Please support my development work by submitting bug-reports, patches
 and (if available) a donation.
 
-See L<documentation in the base class|Any::Daemon/"DESCRIPTION">.
+Extends L<"DESCRIPTION" in Any::Daemon|Any::Daemon/"DESCRIPTION">.
  
 =head1 METHODS
 
-See L<documentation in the base class|Any::Daemon/"METHODS">.
+Extends L<"METHODS" in Any::Daemon|Any::Daemon/"METHODS">.
  
 =head2 Constructors
 
-See L<documentation in the base class|Any::Daemon/"Constructors">.
+Extends L<"Constructors" in Any::Daemon|Any::Daemon/"Constructors">.
  
 =over 4
 
-=item Any::Daemon::HTTP-E<gt>B<new>(OPTIONS)
+=item Any::Daemon::HTTP-E<gt>B<new>(%options)
 
 Also see the option descriptions of L<Any::Daemon::new()|Any::Daemon/"Constructors">.
 
@@ -133,12 +137,13 @@ been produced.  The result of this function should be the new response
 
 =item pid_file => FILENAME
 
-=item proxies => VHOST|HASH-of-OPTIONS|PACKAGE|ARRAY
+=item proxies => PROXY|PACKAGE|\%options|ARRAY
 
-[0.24] For OPTIONS, see L<addProxy()|Any::Daemon::HTTP/"Host administration">.  Provide one or an ARRAY of
-proxy configurations, either by L<Any::Daemon::HTTP::Proxy|Any::Daemon::HTTP::Proxy>
-objects or by the OPTIONS to create such objects.  You can also
-use the option name C<proxy>.
+[0.24] For %options, see L<addProxy()|Any::Daemon::HTTP/"Host administration">.
+The %options are passed to L<addProxy()|Any::Daemon::HTTP/"Host administration">, to create a proxy
+object under fly.  You may also pass an L<Any::Daemon::HTTP::Proxy|Any::Daemon::HTTP::Proxy>
+objects or by the %options to create such objects.  An ARRAY contains a
+mixture of proxy definitions.  Same as option C<proxy>.
 
 =item proxy_class => PACKAGE
 
@@ -165,12 +170,13 @@ response.  They are fed into HTTP::Headers subroutine push_header.
 L<Any::Daemon::HTTP::VirtualHost/DETAILS> about creating your own virtual
 hosts.
 
-=item vhosts => VHOST|HASH-of-OPTIONS|PACKAGE|ARRAY
+=item vhosts => VHOST|PACKAGE|\%options|ARRAY
 
-For OPTIONS, see L<addVirtualHost()|Any::Daemon::HTTP/"Host administration">.  Provide one or an ARRAY of
-virtual host configurations, either by L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost>
-objects or by the OPTIONS to create such objects.  [0.24] You can also
-use the option name C<vhost>.
+The %options are passed to L<addVirtualHost()|Any::Daemon::HTTP/"Host administration">, to create a virtual host
+object under fly.  You may also pass an initialized
+L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> object, or a PACKAGE name to be used
+for the default vhost.  An ARRAY contains a mixture of vhost definitions.
+[0.24] Same as option C<vhost>.
 
 =item workdir => DIRECTORY
 
@@ -180,7 +186,7 @@ use the option name C<vhost>.
 
 =head2 Accessors
 
-See L<documentation in the base class|Any::Daemon/"Accessors">.
+Extends L<"Accessors" in Any::Daemon|Any::Daemon/"Accessors">.
  
 =over 4
 
@@ -191,7 +197,7 @@ L<new(listen)|Any::Daemon::HTTP/"METHODS">.
 
 =item $obj-E<gt>B<workdir>()
 
-See L<Any::Daemon/"Accessors">
+Inherited, see L<Any::Daemon/"Accessors">
 
 =back
 
@@ -210,22 +216,22 @@ you get an error.
 
 =over 4
 
-=item $obj-E<gt>B<addProxy>(OBJECT|HASH-of-OPTIONS|OPTIONS)
+=item $obj-E<gt>B<addProxy>($object|\%options|%options)
 
 Add a L<Any::Daemon::HTTP::Proxy|Any::Daemon::HTTP::Proxy> object which has a C<proxy_map>,
 about how to handle requests for incoming hosts.  The proxy settings
 will be tried in order of addition, only when there are no virtual
 hosts addressed.
 
-=item $obj-E<gt>B<addVirtualHost>(VHOST|HASH-of-OPTIONS|OPTIONS)
+=item $obj-E<gt>B<addVirtualHost>($vhost|\%options|%options)
 
 Adds a new virtual host to the knowledge of the daemon.  Can be used
 at run-time, until the daemon goes into 'run' mode (starts forking
 childs)  The added virtual host object is returned.
 
-The VHOST is an already prepared VirtualHost object.  With a (HASH-of)
-OPTIONS, the VirtualHost object gets created for you with those OPTIONS.
-See L<Any::Daemon::HTTP::VirtualHost::new()|Any::Daemon::HTTP::VirtualHost/"Constructors"> for OPTIONS.
+The $vhost is an already prepared VirtualHost object.  With %options,
+the VirtualHost object gets created for you with those %options.
+See L<Any::Daemon::HTTP::VirtualHost::new()|Any::Daemon::HTTP::VirtualHost/"Constructors"> for %options.
 
 See the manual page for L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> on how you
 can cleanly extend the class for your own purpose.
@@ -254,9 +260,9 @@ example:
     , vhosts    => \@vhosts
     );
 
-=item $obj-E<gt>B<findProxy>(SESSION, REQUEST, HOST)
+=item $obj-E<gt>B<findProxy>($session, $request, $host)
 
-[0.24] Find the first proxy which is mapping the URI of the REQUEST.  Returns a
+[0.24] Find the first proxy which is mapping the URI of the $request.  Returns a
 pair, containing the proxy and the location where it points to.
 
 Usually, in a proxy, the request needs to be in absolute form in the
@@ -266,26 +272,26 @@ request header.  However, we can be more
 
 [0.24] Returns a list with all added proxy objects.
 
-=item $obj-E<gt>B<removeVirtualHost>(VHOST|NAME|ALIAS)
+=item $obj-E<gt>B<removeVirtualHost>($vhost|$name|$alias)
 
 Remove all name and alias registrations for the indicated virtual host.
 Silently ignores non-existing vhosts.  The removed virtual host object
 is returned.
 
-=item $obj-E<gt>B<virtualHost>(NAME)
+=item $obj-E<gt>B<virtualHost>($name)
 
-Find the virtual host with the NAME or alias.  Returns the
+Find the virtual host with the $name or alias.  Returns the
 L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> or C<undef>.
 
 =back
 
 =head2 Action
 
-See L<documentation in the base class|Any::Daemon/"Action">.
+Extends L<"Action" in Any::Daemon|Any::Daemon/"Action">.
  
 =over 4
 
-=item $obj-E<gt>B<run>(OPTIONS)
+=item $obj-E<gt>B<run>(%options)
 
 When there is no vhost yet, one will be created.  When only one vhost
 is active, you may pass C<handle_request> (see the vhost docs).
@@ -439,8 +445,8 @@ Ehhh...
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.24,
-built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.25,
+built on April 15, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

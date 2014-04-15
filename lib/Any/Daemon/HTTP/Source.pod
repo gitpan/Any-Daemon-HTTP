@@ -44,7 +44,7 @@ L<Any::Daemon::HTTP::Proxy|Any::Daemon::HTTP::Proxy>.
 
 =over 4
 
-=item Any::Daemon::HTTP::Source-E<gt>B<new>(OPTIONS|HASH-of-OPTIONS)
+=item Any::Daemon::HTTP::Source-E<gt>B<new>(%options|\%options)
 
  -Option--Default
   allow   <undef>
@@ -90,14 +90,14 @@ trailed by a '/', it will be made so.
 
 =over 4
 
-=item $obj-E<gt>B<allow>(SESSION, REQUEST, URI)
+=item $obj-E<gt>B<allow>($session, $request, $uri)
 
-BE WARNED that the URI is the rewrite of the REQUEST uri, and therefore
-you should use that URI.  The SESSION represents a user.
+BE WARNED that the $uri is the rewrite of the $request uri, and therefore
+you should use that $uri.  The $session represents a user.
 
 See L</Allow access>.
 
-=item $obj-E<gt>B<collect>(VHOST, SESSION, REQUEST, URI)
+=item $obj-E<gt>B<collect>($vhost, $session, $request, $uri)
 
 Try to produce a response (HTTP::Response) for something inside this
 directory structure.  C<undef> is returned if nothing useful is found.
@@ -139,8 +139,8 @@ The parameters to C<allow> or C<deny> are an ARRAY with any combination of
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.24,
-built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.25,
+built on April 15, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

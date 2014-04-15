@@ -44,7 +44,7 @@ by using these options.
 
 =over 4
 
-=item Any::Daemon::HTTP::VirtualHost-E<gt>B<new>(OPTIONS|HASH-of-OPTIONS)
+=item Any::Daemon::HTTP::VirtualHost-E<gt>B<new>(%options|\%options)
 
  -Option     --Default
   aliases      []
@@ -59,7 +59,7 @@ by using these options.
 
 =over 2
 
-=item aliases => HOSTNAME|ARRAY-of-HOSTNAMES
+=item aliases => HOSTNAME|ARRAY
 
 =item directories => OBJECT|HASH|ARRAY
 
@@ -130,31 +130,38 @@ Returns the primary name for this server.
 
 =over 4
 
-=item $obj-E<gt>B<addHandler>(CODE|(PATH => CODE)-LIST|HASH)
+=item $obj-E<gt>B<addHandler>(CODE|$method|$map|HASH)
 
 Handlers are called to dynamically generate responses, for instance
 to fill-in templates.  The L</DETAILS> section below explains how
 handlers work.
 
 When only CODE is given, then this will be the default handler for all
-paths (under '/', top).  You may also pass a list or HASH of PAIRS.
-[0.21] CODE may also be a method name.
+paths (under '/', top). [0.21] CODE may also be a $method name.
+
+Usually, you pass a $map as PAIRS or as HASH, relating PATH names inside
+the virtual host into function references or method names to be used for
+that tree.
 
 example: 
 
-  $vhost->addHandler('/' => \&default_handler,
-      '/upload' => \&upload_handler);
+  $vhost->addHandler('/' => \&default_handler
+     , '/upload' => \&upload_handler);
 
   $vhost->addHandler(\&default_handler);
 
   # [0.21] will call $vhost->formHandle
   $vhost->addHandler('/form' => 'formHandler');
 
-=item $obj-E<gt>B<addHandlers>(PARAMS)
+=item $obj-E<gt>B<addHandlers>($params)
 
 Same as L<addHandler()|Any::Daemon::HTTP::VirtualHost/"Handler">.
 
-=item $obj-E<gt>B<findHandler>(URI|PATH|PATH-SEGMENTS)
+=item $obj-E<gt>B<findHandler>($uri|$path|@segments)
+
+Find the handler which matches the given $uri best.  The $uri is the
+rewritten URI of the request, an URI object.  It's $path is sufficient,
+may also be broken into path @segments already.
 
 =back
 
@@ -162,7 +169,7 @@ Same as L<addHandler()|Any::Daemon::HTTP::VirtualHost/"Handler">.
 
 =over 4
 
-=item $obj-E<gt>B<handleRequest>(SERVER, SESSION, REQUEST, [URI])
+=item $obj-E<gt>B<handleRequest>( $server, $session, $request, [$uri] )
 
 =back
 
@@ -170,24 +177,24 @@ Same as L<addHandler()|Any::Daemon::HTTP::VirtualHost/"Handler">.
 
 =over 4
 
-=item $obj-E<gt>B<addSource>(SOURCE)
+=item $obj-E<gt>B<addSource>($source)
 
-The SOURCE objects extend L<Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source>, for instance a
+The $source objects extend L<Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source>, for instance a
 C<::Directory> or a C<::Proxy>.  You can find them back via L<sourceFor()|Any::Daemon::HTTP::VirtualHost/"Directories">.
 
-=item $obj-E<gt>B<mustRedirect>(URI)
+=item $obj-E<gt>B<mustRedirect>($uri)
 
-[0.21] Returns an HTTP::Response object if the URI needs to be
+[0.21] Returns an HTTP::Response object if the $uri needs to be
 redirected, according to the vhost configuration.
 
-=item $obj-E<gt>B<redirect>(URI, [HTTP_CODE])
+=item $obj-E<gt>B<redirect>( $uri, [$http_code] )
 
-[0.21] Returns an HTTP::Response object of the URI.
+[0.21] Returns an HTTP::Response object of the $uri.
 
-=item $obj-E<gt>B<rewrite>(URI)
+=item $obj-E<gt>B<rewrite>($uri)
 
-Returns an URI object as result, which may be the original in case of
-no rewrite was needed.  See L</URI Rewrite>.
+Returns an $uri object as result, which may be the original in case of
+no rewrite was needed.  See L</$uri Rewrite>.
 
 =back
 
@@ -195,18 +202,18 @@ no rewrite was needed.  See L</URI Rewrite>.
 
 =over 4
 
-=item $obj-E<gt>B<addDirectory>(OBJECT|HASH|OPTIONS)
+=item $obj-E<gt>B<addDirectory>($object|HASH|%options)
 
-Either pass a L<Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory> OBJECT or the OPTIONS to
-create the object.  When OPTIONS are provided, they are passed to
-L<Any::Daemon::HTTP::Directory::new()|Any::Daemon::HTTP::Directory/"Constructors"> to create the OBJECT.
+Either pass a L<Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory> $object or the %options to
+create the object.  When %options are provided, they are passed to
+L<Any::Daemon::HTTP::Directory::new()|Any::Daemon::HTTP::Directory/"Constructors"> to create the $object.
 
-=item $obj-E<gt>B<filename>(URI)
+=item $obj-E<gt>B<filename>($uri)
 
-Translate the URI into a filename, without checking for existence.  Returns
+Translate the $uri into a filename, without checking for existence.  Returns
 C<undef> is not possible.
 
-=item $obj-E<gt>B<sourceFor>(PATH|PATH_SEGMENTS)
+=item $obj-E<gt>B<sourceFor>($path|$path_segments)
 
 Find the best matching L<Any::Daemon::HTTP::Source|Any::Daemon::HTTP::Source> object, which
 might be a C<::UserDirs>, a C<::Directory>, or a C<::Proxy>.
@@ -217,11 +224,11 @@ might be a C<::UserDirs>, a C<::Directory>, or a C<::Proxy>.
 
 =over 4
 
-=item $obj-E<gt>B<addProxy>(OBJECT|HASH|OPTIONS)
+=item $obj-E<gt>B<addProxy>($object|HASH|%options)
 
-Either pass a L<Any::Daemon::HTTP::Proxy|Any::Daemon::HTTP::Proxy> OBJECT or the OPTIONS to
-create the object.  When OPTIONS are provided, they are passed to
-L<Any::Daemon::HTTP::Proxy::new()|Any::Daemon::HTTP::Proxy/"Constructors"> to create the OBJECT.
+Either pass a L<Any::Daemon::HTTP::Proxy|Any::Daemon::HTTP::Proxy> $object or the %options to
+create the object.  When %options are provided, they are passed to
+L<Any::Daemon::HTTP::Proxy::new()|Any::Daemon::HTTP::Proxy/"Constructors"> to create the $object.
 
 =back
 
@@ -331,8 +338,8 @@ as well.
 
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.24,
-built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.25,
+built on April 15, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 

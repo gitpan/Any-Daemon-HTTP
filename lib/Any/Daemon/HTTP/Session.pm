@@ -7,7 +7,7 @@ use warnings;
 
 package Any::Daemon::HTTP::Session;
 use vars '$VERSION';
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 
 use Log::Report    'any-daemon-http';

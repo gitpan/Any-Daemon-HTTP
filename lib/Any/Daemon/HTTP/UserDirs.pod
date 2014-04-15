@@ -25,19 +25,19 @@ Any::Daemon::HTTP::UserDirs - describe user directories
 
 Each L<Any::Daemon::HTTP::VirtualHost|Any::Daemon::HTTP::VirtualHost> may define user directories.
 
-See L<documentation in the base class|Any::Daemon::HTTP::Directory/"DESCRIPTION">.
+Extends L<"DESCRIPTION" in Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory/"DESCRIPTION">.
  
 =head1 METHODS
 
-See L<documentation in the base class|Any::Daemon::HTTP::Directory/"METHODS">.
+Extends L<"METHODS" in Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory/"METHODS">.
  
 =head2 Constructors
 
-See L<documentation in the base class|Any::Daemon::HTTP::Directory/"Constructors">.
+Extends L<"Constructors" in Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory/"Constructors">.
  
 =over 4
 
-=item Any::Daemon::HTTP::UserDirs-E<gt>B<new>(OPTIONS|HASH-of-OPTIONS)
+=item Any::Daemon::HTTP::UserDirs-E<gt>B<new>(%options|\%options)
 
 The user-dir rewrite routine has by default Apache-like behavior.
 
@@ -93,68 +93,68 @@ Only used with the default user-dir rewrite rule.
 
 =head2 Attributes
 
-See L<documentation in the base class|Any::Daemon::HTTP::Directory/"Attributes">.
+Extends L<"Attributes" in Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory/"Attributes">.
  
 =over 4
 
 =item $obj-E<gt>B<charset>()
 
-See L<Any::Daemon::HTTP::Directory/"Attributes">
+Inherited, see L<Any::Daemon::HTTP::Directory/"Attributes">
 
 =item $obj-E<gt>B<location>()
 
-See L<Any::Daemon::HTTP::Directory/"Attributes">
+Inherited, see L<Any::Daemon::HTTP::Directory/"Attributes">
 
 =item $obj-E<gt>B<name>()
 
-See L<Any::Daemon::HTTP::Source/"Attributes">
+Inherited, see L<Any::Daemon::HTTP::Source/"Attributes">
 
 =item $obj-E<gt>B<path>()
 
-See L<Any::Daemon::HTTP::Source/"Attributes">
+Inherited, see L<Any::Daemon::HTTP::Source/"Attributes">
 
 =back
 
 =head2 Permissions
 
-See L<documentation in the base class|Any::Daemon::HTTP::Directory/"Permissions">.
+Extends L<"Permissions" in Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory/"Permissions">.
  
 =over 4
 
-=item $obj-E<gt>B<allow>(SESSION, REQUEST, URI)
+=item $obj-E<gt>B<allow>($session, $request, $uri)
 
-See L<Any::Daemon::HTTP::Source/"Permissions">
+Inherited, see L<Any::Daemon::HTTP::Source/"Permissions">
 
-=item $obj-E<gt>B<collect>(VHOST, SESSION, REQUEST, URI)
+=item $obj-E<gt>B<collect>($vhost, $session, $request, $uri)
 
-See L<Any::Daemon::HTTP::Source/"Permissions">
+Inherited, see L<Any::Daemon::HTTP::Source/"Permissions">
 
 =back
 
 =head2 Actions
 
-See L<documentation in the base class|Any::Daemon::HTTP::Directory/"Actions">.
+Extends L<"Actions" in Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory/"Actions">.
  
 =over 4
 
-=item $obj-E<gt>B<filename>(PATH)
+=item $obj-E<gt>B<filename>($path)
 
-See L<Any::Daemon::HTTP::Directory/"Actions">
+Inherited, see L<Any::Daemon::HTTP::Directory/"Actions">
 
-=item $obj-E<gt>B<list>(DIRECTORY, OPTIONS)
+=item $obj-E<gt>B<list>($directory, %options)
 
-See L<Any::Daemon::HTTP::Directory/"Actions">
+Inherited, see L<Any::Daemon::HTTP::Directory/"Actions">
 
 =back
 
 =head1 DETAILS
 
-See L<documentation in the base class|Any::Daemon::HTTP::Directory/"DETAILS">.
+Extends L<"DETAILS" in Any::Daemon::HTTP::Directory|Any::Daemon::HTTP::Directory/"DETAILS">.
  
 =head1 SEE ALSO
 
-This module is part of Any-Daemon-HTTP distribution version 0.24,
-built on January 05, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
+This module is part of Any-Daemon-HTTP distribution version 0.25,
+built on April 15, 2014. Website: F<http://perl.overmeer.net/any-daemon/>
 
 =head1 LICENSE
 
